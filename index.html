@@ -691,7 +691,7 @@
       <div id="scenario-badge" class="scenario-badge">Sample floor plan loaded · not running</div>
     </header>
 
-    <p class="intro">Set up a venue layout and crowd, then watch people follow walkable routes to a single exit. This stage uses constant-speed movement without crowding or door queues.</p>
+    <p class="intro">Set up a venue and crowd, then watch people choose exits, move at a density-adjusted speed, and queue when an exit is busy.</p>
 
     <main>
       <div class="workspace">
@@ -702,7 +702,7 @@
               <h2 id="floorplan-title">Training Hall</h2>
               <p id="floorplan-description" class="card-description">Sample floor plan · layout units: feet</p>
             </div>
-            <span class="preview-label">Stage 3 movement</span>
+            <span class="preview-label">Stage 4 flow</span>
           </div>
 
           <div class="editor-toolbar" role="toolbar" aria-label="Floor plan editing tools">
@@ -723,7 +723,7 @@
           <figure id="map-frame" class="map-frame">
             <svg id="floorplan-map" viewBox="0 0 80 50" role="group" aria-labelledby="map-title map-desc" tabindex="0">
               <title id="map-title">Editable Training Hall floor plan</title>
-              <desc id="map-desc">A 70 by 40 foot rectangular room with editable seating, walls, exits, and a starting region. People move along routes on a half-foot grid.</desc>
+              <desc id="map-desc">A 70 by 40 foot rectangular room with editable seating, walls, exits, and a starting region. People move along routes on a half-foot grid; queue counts appear at busy exits.</desc>
               <defs>
                 <pattern id="floor-grid" width="5" height="5" patternUnits="userSpaceOnUse">
                   <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#e2eaf1" stroke-width="0.08" />
@@ -734,9 +734,10 @@
               <rect x="5" y="5" width="70" height="40" fill="url(#floor-grid)" />
               <rect x="5" y="5" width="70" height="40" rx="0.4" fill="none" stroke="#33465e" stroke-width="0.45" />
               <text x="5" y="3.3" fill="#52657d" font-family="system-ui, sans-serif" font-size="1.3" font-weight="700">TRAINING HALL · 70 × 40 FT</text>
-              <g id="layout-items"></g>
               <g id="region-layer" pointer-events="none"></g>
+              <g id="layout-items"></g>
               <g id="crowd-layer" pointer-events="none"></g>
+              <g id="queue-layer" pointer-events="none"></g>
               <g id="drawing-preview" pointer-events="none"></g>
             </svg>
           </figure>
@@ -745,10 +746,10 @@
           <ul class="map-legend" aria-label="Floor plan legend">
             <li class="legend-item"><span class="legend-swatch person" aria-hidden="true"></span>People</li>
             <li class="legend-item"><span class="legend-swatch seats" aria-hidden="true"></span>Seat blocks</li>
-            <li class="legend-item"><span class="legend-swatch exit" aria-hidden="true"></span>Exit</li>
+            <li class="legend-item"><span class="legend-swatch exit" aria-hidden="true"></span>Exit / queue</li>
             <li class="legend-item"><span class="legend-swatch region" aria-hidden="true"></span>Starting region</li>
           </ul>
-          <p class="hint">Routing uses a 0.5-foot grid. People are placed randomly in walkable cells in the selected starting region.</p>
+          <p class="hint">Routes use a 0.5-foot grid. Starting-area density sets walking speed; exit queues are flow-limited.</p>
         </section>
 
         <aside class="side-stack" aria-label="Controls and live status">
@@ -758,7 +759,7 @@
                 <p class="section-label">Setup</p>
                 <h2 id="controls-title">Scenario controls</h2>
               </div>
-              <span class="preview-label">Single-exit model</span>
+              <span class="preview-label">Hydraulic flow model</span>
             </div>
 
             <div class="control-group">
@@ -783,12 +784,12 @@
                 <input id="crowd-size" type="number" min="100" max="2000" step="1" value="500" aria-describedby="crowd-size-error">
               </div>
               <p id="crowd-size-error" class="field-error" aria-live="polite"></p>
-              <p class="hint">People are placed randomly in walkable cells in the selected region.</p>
+              <p class="hint">People are randomly placed in walkable cells. The starting region must have a feasible average density.</p>
               <div class="field">
                 <label for="walking-speed">Walking speed (mph)</label>
                 <input id="walking-speed" type="number" min="0.5" max="3" step="0.1" value="2.7" inputmode="decimal" aria-describedby="walking-speed-hint walking-speed-error">
               </div>
-              <p id="walking-speed-hint" class="hint">Choose a constant walking speed from 0.5 to 3.0 mph. Density slowdown and door queues are not included yet.</p>
+              <p id="walking-speed-hint" class="hint">Choose the free-flow walking speed from 0.5 to 3.0 mph. Starting-area density may reduce it for the run.</p>
               <p id="walking-speed-error" class="field-error" aria-live="polite"></p>
               <div class="field">
                 <label for="exit-width">New exit width (feet)</label>
@@ -902,7 +903,7 @@
       </section>
     </main>
 
-    <p class="page-footnote">This stage models walking routes and constant-speed movement only; density effects, queues, live plots, and export are not included.</p>
+    <p class="page-footnote">This simplified hydraulic model uses starting-area average density and exit-flow limits; it does not model changing local congestion or crowd interactions, and is for education, not engineering analysis. Live plots, milestones, and export are planned for later stages.</p>
   </div>
   <script>
     (() => {
@@ -931,6 +932,7 @@
       const itemLayer = document.getElementById("layout-items");
       const regionLayer = document.getElementById("region-layer");
       const crowdLayer = document.getElementById("crowd-layer");
+      const queueLayer = document.getElementById("queue-layer");
       const previewLayer = document.getElementById("drawing-preview");
       const toolButtons = [...document.querySelectorAll("[data-tool]")];
       const deleteButton = document.getElementById("delete-selected");
@@ -959,20 +961,30 @@
       const noticeText = document.getElementById("status-notice-text");
 
       let items = sampleItems.map(item => ({ ...item }));
-      let region = { x: 30, y: 18, width: 20, height: 9 };
+      let region = { ...room };
       let selectedItemId = null;
       let currentTool = "select";
       let drawing = null;
       let nextItemId = 14;
       let nextExitNumber = 2;
       const gridStep = 0.5;
+      const maximumSpecificFlow = 24;
+      const densitySpeedConstant = 275;
+      const densityAreaConstant = 2.86;
+      const lowDensityThreshold = 0.05;
+      const jamDensity = 1 / densityAreaConstant;
+      const routeReassessmentInterval = 5;
+      const routeSwitchImprovement = 0.1;
       let simulationState = "ready";
-      let routeField = null;
+      let walkableGrid = null;
+      let routeFields = [];
       let initialAgents = [];
       let agents = [];
+      let exitQueues = new Map();
       let elapsedSeconds = 0;
       let frameRequest = null;
       let lastFrameTime = 0;
+      let nextReassessmentSeconds = routeReassessmentInterval;
       let setupValid = false;
 
       function svgElement(tag, attributes = {}, text = "") {
@@ -1308,22 +1320,45 @@
         return true;
       }
 
-      function findRouteField(exit) {
+      function buildWalkableGrid() {
         const columns = Math.round(room.width / gridStep);
         const rows = Math.round(room.height / gridStep);
         const size = columns * rows;
         const walkable = new Uint8Array(size);
+
+        for (let index = 0; index < size; index += 1) {
+          const point = cellCenter(index, columns);
+          if (!isWalkable(point)) {
+            continue;
+          }
+          walkable[index] = 1;
+        }
+
+        return { columns, rows, size, walkable };
+      }
+
+      function regionCellsIn(grid) {
+        const cells = [];
+        for (let index = 0; index < grid.size; index += 1) {
+          if (!grid.walkable[index]) {
+            continue;
+          }
+          const point = cellCenter(index, grid.columns);
+          if (point.x >= region.x && point.x <= region.x + region.width
+            && point.y >= region.y && point.y <= region.y + region.height) {
+            cells.push(index);
+          }
+        }
+        return cells;
+      }
+
+      function findRouteField(exit, grid) {
+        const { columns, rows, size, walkable } = grid;
         const distance = new Int32Array(size);
         const nextTowardExit = new Int32Array(size);
         const queue = new Uint32Array(size);
         distance.fill(-1);
         nextTowardExit.fill(-1);
-
-        for (let index = 0; index < size; index += 1) {
-          if (isWalkable(cellCenter(index, columns))) {
-            walkable[index] = 1;
-          }
-        }
 
         const start = exit.position - exit.width / 2;
         const end = exit.position + exit.width / 2;
@@ -1382,37 +1417,15 @@
           }
         }
 
-        const regionCells = [];
-        if (region) {
-          for (let index = 0; index < size; index += 1) {
-            const point = cellCenter(index, columns);
-            if (point.x >= region.x && point.x <= region.x + region.width
-              && point.y >= region.y && point.y <= region.y + region.height
-              && walkable[index]) {
-              regionCells.push(index);
-            }
-          }
-        }
-        if (regionCells.length === 0) {
-          return { error: "The selected crowd region contains no walkable cells on the 0.5-foot grid." };
-        }
-        if (regionCells.some(index => distance[index] < 0)) {
-          return { error: "The selected crowd region contains walkable cells with no route to the exit." };
-        }
-
-        return { columns, distance, nextTowardExit, regionCells, exit };
+        return { columns, distance, nextTowardExit, exit };
       }
 
-      function exitTarget(exit, boundaryPoint) {
-        const outside = 0.75;
-        if (exit.side === "east") return { x: room.x + room.width + outside, y: boundaryPoint.y };
-        if (exit.side === "west") return { x: room.x - outside, y: boundaryPoint.y };
-        if (exit.side === "north") return { x: boundaryPoint.x, y: room.y - outside };
-        return { x: boundaryPoint.x, y: room.y + room.height + outside };
-      }
-
-      function buildAgentPath(startIndex, route) {
+      function buildAgentPath(startIndex, route, startPoint) {
         const path = [];
+        const startCenter = cellCenter(startIndex, route.columns);
+        if (Math.hypot(startPoint.x - startCenter.x, startPoint.y - startCenter.y) > 0.001) {
+          path.push(startCenter);
+        }
         let index = startIndex;
         let steps = 0;
         while (route.nextTowardExit[index] !== -1) {
@@ -1423,7 +1436,11 @@
             return null;
           }
         }
-        path.push(exitTarget(route.exit, cellCenter(index, route.columns)));
+        const exitPoint = cellCenter(index, route.columns);
+        const lastPoint = path[path.length - 1];
+        if (!lastPoint || lastPoint.x !== exitPoint.x || lastPoint.y !== exitPoint.y) {
+          path.push(exitPoint);
+        }
         return path;
       }
 
@@ -1443,24 +1460,69 @@
           y: data.y,
           path: data.path.map(point => ({ ...point })),
           targetIndex: 0,
-          speed: data.speed,
+          walkingSpeed: data.walkingSpeed,
+          exitId: data.exitId,
+          queued: false,
           element,
           evacuated: false
         };
       }
 
-      function createInitialAgents(route, count, speed) {
-        const cells = [...route.regionCells];
+      function cellIndexAt(point) {
+        const column = clamp(Math.floor((point.x - room.x) / gridStep), 0, walkableGrid.columns - 1);
+        const row = clamp(Math.floor((point.y - room.y) / gridStep), 0, walkableGrid.rows - 1);
+        return row * walkableGrid.columns + column;
+      }
+
+      function estimatedExitTime(point, walkingSpeed, route, assignedCount) {
+        const index = cellIndexAt(point);
+        const steps = route.distance[index];
+        if (steps < 0) {
+          return Infinity;
+        }
+        const center = cellCenter(index, route.columns);
+        const distance = steps * gridStep + Math.hypot(point.x - center.x, point.y - center.y);
+        const walkingSeconds = distance / (walkingSpeed / 60);
+        const serviceRate = maximumSpecificFlow * route.exit.width;
+        const queueSeconds = assignedCount * 60 / serviceRate;
+        return walkingSeconds + queueSeconds;
+      }
+
+      function walkingSpeedAtDensity(freeSpeed, density) {
+        if (density < lowDensityThreshold) {
+          return freeSpeed;
+        }
+        const hydraulicSpeed = Math.max(0, densitySpeedConstant * (1 - densityAreaConstant * density));
+        return Math.min(freeSpeed, hydraulicSpeed);
+      }
+
+      function createInitialAgents(routes, regionCells, count, walkingSpeed) {
+        const cells = [...regionCells];
         for (let index = cells.length - 1; index > 0; index -= 1) {
           const swapIndex = Math.floor(Math.random() * (index + 1));
           [cells[index], cells[swapIndex]] = [cells[swapIndex], cells[index]];
         }
 
+        const projectedLoads = new Map(routes.map(route => [route.exit.id, 0]));
         const created = [];
         for (let index = 0; index < count; index += 1) {
           const cell = cells[index % cells.length];
-          const position = cellCenter(cell, route.columns);
-          const path = buildAgentPath(cell, route);
+          const position = cellCenter(cell, walkableGrid.columns);
+          let selectedRoute = null;
+          let selectedCost = Infinity;
+          for (const route of routes) {
+            const load = projectedLoads.get(route.exit.id);
+            const cost = estimatedExitTime(position, walkingSpeed, route, load);
+            if (cost < selectedCost) {
+              selectedRoute = route;
+              selectedCost = cost;
+            }
+          }
+          if (!selectedRoute || !Number.isFinite(selectedCost)) {
+            return { error: "No exit is reachable from a person in the selected starting region." };
+          }
+          projectedLoads.set(selectedRoute.exit.id, projectedLoads.get(selectedRoute.exit.id) + 1);
+          const path = buildAgentPath(cell, selectedRoute, position);
           if (!path) {
             return { error: "A route could not be constructed for a person in the selected region." };
           }
@@ -1468,7 +1530,8 @@
             x: position.x,
             y: position.y,
             path,
-            speed: speed * 5280 / 3600
+            walkingSpeed,
+            exitId: selectedRoute.exit.id
           });
         }
         return { agents: created };
@@ -1476,7 +1539,60 @@
 
       function renderCrowd() {
         crowdLayer.replaceChildren();
+        queueLayer.replaceChildren();
+        exitQueues = new Map(routeFields.map(route => [route.exit.id, {
+          exit: route.exit,
+          people: [],
+          serviceAccumulator: 0,
+          serviceHeadway: 60 / (maximumSpecificFlow * route.exit.width)
+        }]));
         agents = initialAgents.map(createAgent);
+        renderQueueIndicators();
+      }
+
+      function queueIndicatorPosition(exit) {
+        if (exit.side === "east") return { x: room.x + room.width - 3, y: exit.position - exit.width / 2 - 1.5 };
+        if (exit.side === "west") return { x: room.x + 3, y: exit.position - exit.width / 2 - 1.5 };
+        if (exit.side === "north") return { x: exit.position, y: room.y + 2.5 };
+        return { x: exit.position, y: room.y + room.height - 2.5 };
+      }
+
+      function renderQueueIndicators() {
+        queueLayer.replaceChildren();
+        for (const queue of exitQueues.values()) {
+          const count = queue.people.length;
+          if (count === 0) {
+            continue;
+          }
+          const position = queueIndicatorPosition(queue.exit);
+          const width = 2.2 + String(count).length * 0.6;
+          const group = svgElement("g", {
+            role: "img",
+            "aria-label": `${queue.exit.label} queue: ${count} people`
+          });
+          group.append(
+            svgElement("rect", {
+              x: position.x - width / 2,
+              y: position.y - 1.25,
+              width,
+              height: 1.7,
+              rx: 0.35,
+              fill: "#fff3d8",
+              stroke: "#8a5700",
+              "stroke-width": 0.12
+            }),
+            svgElement("text", {
+              x: position.x,
+              y: position.y - 0.1,
+              fill: "#714900",
+              "font-family": "system-ui, sans-serif",
+              "font-size": 0.95,
+              "font-weight": 800,
+              "text-anchor": "middle"
+            }, `Q ${count}`)
+          );
+          queueLayer.append(group);
+        }
       }
 
       function setSimulationState(nextState) {
@@ -1502,7 +1618,7 @@
         };
         const messages = {
           ready: setupValid ? "Start to move people toward the exit." : "Correct the setup issues to enable Start.",
-          running: "People walk at constant speed; door queues are not modeled.",
+          running: "Starting-area density sets walking speed; exits process up to 24 people/min per foot of clear width.",
           paused: "Resume or reset the movement.",
           complete: "Everyone has reached the exit."
         };
@@ -1526,30 +1642,59 @@
           return;
         }
         const errors = [];
+        const warnings = [];
         const countValid = validateCrowdCount();
         const speedValid = validateWalkingSpeed();
         if (!countValid) errors.push(countError.textContent);
         if (!speedValid) errors.push(speedError.textContent);
         if (!region) errors.push("Set a starting crowd region.");
         const exits = items.filter(item => item.type === "exit");
-        if (exits.length !== 1) {
-          errors.push("Stage 3 requires exactly one exit.");
+        if (exits.length === 0) {
+          errors.push("Add at least one exit.");
         }
 
-        routeField = null;
+        walkableGrid = buildWalkableGrid();
+        routeFields = [];
         initialAgents = [];
         crowdLayer.replaceChildren();
-        if (region && exits.length === 1) {
-          const route = findRouteField(exits[0]);
+        queueLayer.replaceChildren();
+        exitQueues = new Map();
+        const regionCells = region ? regionCellsIn(walkableGrid) : [];
+        if (region && regionCells.length === 0) {
+          errors.push("The selected crowd region contains no walkable cells on the 0.5-foot grid.");
+        }
+
+        for (const exit of exits) {
+          const route = findRouteField(exit, walkableGrid);
           if (route.error) {
-            errors.push(route.error);
+            warnings.push(`${exit.label} unavailable: ${route.error}`);
+          } else if (!regionCells.some(index => route.distance[index] >= 0)) {
+            warnings.push(`${exit.label} cannot be reached from the selected starting region.`);
           } else {
-            routeField = route;
+            routeFields.push(route);
           }
         }
 
-        if (errors.length === 0 && routeField) {
-          const initial = createInitialAgents(routeField, Number(countInput.value), Number(speedInput.value));
+        if (routeFields.length === 0 && exits.length > 0) {
+          errors.push("The selected crowd region contains walkable cells with no route to any available exit.");
+        }
+
+        if (routeFields.length > 0
+          && regionCells.some(index => !routeFields.some(route => route.distance[index] >= 0))) {
+          errors.push("The selected crowd region contains walkable cells with no route to any available exit.");
+        }
+
+        const startArea = regionCells.length * gridStep * gridStep;
+        const startingDensity = startArea > 0 && countValid ? Number(countInput.value) / startArea : 0;
+        if (countValid && startArea > 0 && startingDensity >= jamDensity) {
+          errors.push(`Starting density is ${numberLabel(startingDensity)} people/ft²; it must be below ${jamDensity.toFixed(2)} people/ft².`);
+        }
+        const startingWalkingSpeed = speedValid && startArea > 0
+          ? walkingSpeedAtDensity(Number(speedInput.value) * 88, startingDensity)
+          : 0;
+
+        if (errors.length === 0 && routeFields.length > 0) {
+          const initial = createInitialAgents(routeFields, regionCells, Number(countInput.value), startingWalkingSpeed);
           if (initial.error) {
             errors.push(initial.error);
           } else {
@@ -1563,9 +1708,10 @@
         evacuatedCount.textContent = "0";
         remainingCount.textContent = countValid ? countInput.value : "—";
         simulationFeedback.textContent = setupValid
-          ? `Ready: ${countInput.value} people routed to ${exits[0].label}. No density slowdown or door queue is applied.`
-          : [...new Set(errors)].join(" ");
+          ? `Ready: ${countInput.value} people can use ${routeFields.length} exit${routeFields.length === 1 ? "" : "s"}. Starting density is ${startingDensity.toFixed(2)} people/ft²; walking speed is ${(startingWalkingSpeed / 88).toFixed(2)} mph. FIFO queues are enabled.${warnings.length ? ` ${warnings.join(" ")}` : ""}`
+          : [...new Set([...errors, ...warnings])].join(" ");
         simulationFeedback.classList.toggle("is-invalid", !setupValid);
+        nextReassessmentSeconds = routeReassessmentInterval;
         if (setupValid) {
           renderCrowd();
         }
@@ -1577,6 +1723,101 @@
         evacuatedCount.textContent = String(evacuated);
         remainingCount.textContent = String(agents.length - evacuated);
         elapsedTime.textContent = `${elapsedSeconds.toFixed(1)} s`;
+        renderQueueIndicators();
+      }
+
+      function movementSpeed(agent) {
+        return agent.walkingSpeed / 60;
+      }
+
+      function setAgentRoute(agent, route) {
+        const index = cellIndexAt(agent);
+        if (route.distance[index] < 0) {
+          return false;
+        }
+        const path = buildAgentPath(index, route, agent);
+        if (!path) {
+          return false;
+        }
+        agent.path = path;
+        agent.targetIndex = 0;
+        agent.exitId = route.exit.id;
+        return true;
+      }
+
+      function reassessRoutes() {
+        const projectedLoads = new Map(routeFields.map(route => [
+          route.exit.id,
+          exitQueues.get(route.exit.id).people.length
+        ]));
+        for (const agent of agents) {
+          if (!agent.evacuated && !agent.queued) {
+            projectedLoads.set(agent.exitId, projectedLoads.get(agent.exitId) + 1);
+          }
+        }
+        for (const agent of agents) {
+          if (agent.evacuated || agent.queued) {
+            continue;
+          }
+          const currentRoute = routeFields.find(route => route.exit.id === agent.exitId);
+          if (!currentRoute) {
+            throw new Error(`No route exists for exit ${agent.exitId}.`);
+          }
+          projectedLoads.set(currentRoute.exit.id, projectedLoads.get(currentRoute.exit.id) - 1);
+          let selectedRoute = null;
+          let selectedCost = Infinity;
+          let currentCost = Infinity;
+          for (const route of routeFields) {
+            const load = projectedLoads.get(route.exit.id);
+            const cost = estimatedExitTime(agent, agent.walkingSpeed, route, load);
+            if (route.exit.id === agent.exitId) {
+              currentCost = cost;
+            }
+            if (cost < selectedCost) {
+              selectedRoute = route;
+              selectedCost = cost;
+            }
+          }
+          const shouldSwitch = selectedRoute
+            && selectedRoute.exit.id !== currentRoute.exit.id
+            && selectedCost <= currentCost * (1 - routeSwitchImprovement);
+          const chosenRoute = shouldSwitch ? selectedRoute : currentRoute;
+          if (!chosenRoute) {
+            continue;
+          }
+          projectedLoads.set(chosenRoute.exit.id, projectedLoads.get(chosenRoute.exit.id) + 1);
+          if (chosenRoute.exit.id !== agent.exitId && !setAgentRoute(agent, chosenRoute)) {
+            throw new Error(`Could not create a route to ${chosenRoute.exit.label}.`);
+          }
+        }
+      }
+
+      function joinExitQueue(agent) {
+        const queue = exitQueues.get(agent.exitId);
+        if (!queue) {
+          throw new Error(`No queue exists for exit ${agent.exitId}.`);
+        }
+        agent.queued = true;
+        queue.people.push(agent);
+      }
+
+      function serviceExitQueues(deltaSeconds) {
+        for (const queue of exitQueues.values()) {
+          if (queue.people.length === 0) {
+            queue.serviceAccumulator = 0;
+            continue;
+          }
+          queue.serviceAccumulator += deltaSeconds;
+          while (queue.people.length > 0 && queue.serviceAccumulator >= queue.serviceHeadway) {
+            queue.serviceAccumulator -= queue.serviceHeadway;
+            const agent = queue.people.shift();
+            agent.evacuated = true;
+            agent.element.remove();
+          }
+          if (queue.people.length === 0) {
+            queue.serviceAccumulator = 0;
+          }
+        }
       }
 
       function animateSimulation(timestamp) {
@@ -1587,25 +1828,33 @@
         lastFrameTime = timestamp;
         elapsedSeconds += deltaSeconds;
 
+        serviceExitQueues(deltaSeconds);
+        while (elapsedSeconds >= nextReassessmentSeconds) {
+          reassessRoutes();
+          nextReassessmentSeconds += routeReassessmentInterval;
+        }
+
         for (const agent of agents) {
-          if (agent.evacuated) {
+          if (agent.evacuated || agent.queued) {
             continue;
           }
-          let distanceLeft = agent.speed * deltaSeconds;
-          while (distanceLeft > 0 && agent.targetIndex < agent.path.length) {
+          let distanceLeft = movementSpeed(agent) * deltaSeconds;
+          while (agent.targetIndex < agent.path.length) {
             const target = agent.path[agent.targetIndex];
             const dx = target.x - agent.x;
             const dy = target.y - agent.y;
             const distance = Math.hypot(dx, dy);
-            if (distance <= distanceLeft || distance < 0.0001) {
+            if (distance < 0.0001) {
+              agent.x = target.x;
+              agent.y = target.y;
+              agent.targetIndex += 1;
+            } else if (distanceLeft <= 0) {
+              break;
+            } else if (distance <= distanceLeft) {
               agent.x = target.x;
               agent.y = target.y;
               distanceLeft -= distance;
               agent.targetIndex += 1;
-              if (agent.targetIndex === agent.path.length) {
-                agent.evacuated = true;
-                agent.element.remove();
-              }
             } else {
               agent.x += dx / distance * distanceLeft;
               agent.y += dy / distance * distanceLeft;
@@ -1615,6 +1864,9 @@
           if (!agent.evacuated) {
             agent.element.setAttribute("cx", String(agent.x));
             agent.element.setAttribute("cy", String(agent.y));
+          }
+          if (agent.targetIndex === agent.path.length) {
+            joinExitQueue(agent);
           }
         }
 
@@ -1629,6 +1881,9 @@
       function startSimulation() {
         if (!setupValid || simulationState === "running" || simulationState === "complete") {
           return;
+        }
+        if (simulationState === "ready") {
+          nextReassessmentSeconds = elapsedSeconds + routeReassessmentInterval;
         }
         setSimulationState("running");
         lastFrameTime = performance.now();
@@ -1648,6 +1903,7 @@
         if (frameRequest !== null) cancelAnimationFrame(frameRequest);
         frameRequest = null;
         elapsedSeconds = 0;
+        nextReassessmentSeconds = routeReassessmentInterval;
         renderCrowd();
         updateCounters();
         setSimulationState("ready");
@@ -1749,7 +2005,7 @@
         items = sampleItems.map(item => ({ ...item }));
         nextItemId = Math.max(...items.map(item => item.id)) + 1;
         nextExitNumber = 2;
-        region = { x: 30, y: 18, width: 20, height: 9 };
+        region = { ...room };
         selectedItemId = null;
         countInput.value = "500";
         speedInput.value = "2.7";

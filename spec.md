@@ -11,13 +11,15 @@ Provide a single-file browser app, implemented in the top-level `index.html`, to
 - Simulation playback controls (start, pause, reset, and animation playback speed); playback speed affects animation only, while walking speed affects simulation movement
 
 ## Calculations
-- Find walkable routes around walls and seat blocks on a 0.5-foot grid; during the single-exit movement stage, reject a crowd region with any walkable grid area that cannot reach the exit
-- Move people at their selected constant walking speed (0.5–3.0 mph, default 2.7 mph); do not apply density slowdown or door queues until the later flow-model stage
-- Later, choose among exits by estimated walking time plus queue delay, allow exit switching as congestion changes, and apply the selected published density/flow model (model, source, and reassessment timing TBD)
+- Find walkable routes around walls and seat blocks on a 0.5-foot grid; require every walkable cell in the starting region to reach at least one exit
+- Calculate average starting density from the crowd count and walkable area in the selected region. Below 0.05 people/ft², use the selected free-flow walking speed; otherwise use the level-floor hydraulic relation `S = 275(1 − 2.86D)` ft/min, capped at the selected free-flow speed. Apply this density-adjusted walking speed throughout the run; model congestion with exit queues rather than re-estimating local density from the moving agents. Reject a starting region at or above the relation's zero-speed density (about 0.35 people/ft²).
+- Cap each exit at 24 people/min per foot of its clear width, without subtracting a jamb boundary layer, to match the accepted 500-person / 6-ft door benchmark. Queue people first-in, first-out and estimate queue delay from the current queue and people already assigned to that exit.
+- Choose exits by estimated walking time plus queue delay. Reassess every 5 simulated seconds and switch only when another exit's estimate is at least 10% lower; do not switch a person after they join an exit queue.
+- The hydraulic model is summarized by [DGA Consulting](https://dgaconsulting.net/tools/egress-time-calculator/) and references Fruin (1971), Predtechenskii and Milinskii (1978), Pauls (1987), and [NIST Technical Note 1680](https://nvlpubs.nist.gov/nistpubs/TechnicalNotes/NIST.TN.1680.pdf). This aggregate-density approximation does not resolve changing local congestion, counterflow, or crowd interactions; it is an educational model, not an engineering analysis.
 - Count a person as evacuated when they cross an exit; track the times when 50%, 90%, and 100% of the crowd have crossed, and finish when everyone has crossed
 
 ## Outputs
-- Animated floor plan showing people walking toward exits and queuing at doors
+- Animated floor plan showing people walking toward exits, exit queues, and queue counts by exit
 - During a run, elapsed time and evacuated/remaining crowd counts, updated live
 - A live plot with time in minutes on the horizontal axis and people remaining on the vertical axis
 - Total evacuation time and the times when 50% and 90% of the crowd have evacuated
@@ -26,12 +28,12 @@ Provide a single-file browser app, implemented in the top-level `index.html`, to
 - If a layout is rejected, an explanation that the selected crowd region contains an area with no route to an exit
 
 ## Look and feel
-Educational and approachable, using simple visual cues. Keep the floor plan as the main focus, with controls and live results in supporting panels. Support desktop, tablet, and phone layouts, with readable contrast and labels or other non-color cues so information is not conveyed by color alone. Load a sample floor plan and crowd at startup, ready for the user to start the simulation.
+Educational and approachable, using simple visual cues. Keep the floor plan as the main focus, with controls and live results in supporting panels. Support desktop, tablet, and phone layouts, with readable contrast and labels or other non-color cues so information is not conveyed by color alone. Load a sample floor plan and crowd at startup, ready for the user to start the simulation. The sample starting region covers the walkable floor area to avoid an unrealistic initial crowd density.
 
 ## Validation
-- Door-flow check: 500 people through a 6 ft door at approximately 24 people/min/ft (SFPE Handbook; exact edition and page TBD) gives a theoretical door-flow time of about 3.47 minutes (500 / (24 × 6) = 3.472 min). Validate this theoretical benchmark separately; Stage 3 movement does not model door flow or queues, and the pass/fail tolerance is TBD.
-- Total-evacuation check: once the flow model is implemented, include walking time to the door and compare total evacuation time with the door-flow-only estimate. Room dimensions, crowd-to-door distance, initial crowd distribution, and pass/fail criterion are TBD.
-- Validate routing around walls and obstacles, exit selection and switching under congestion, and rejection of a crowd region with no route to an exit.
+- Door-flow check: 500 people through a 6 ft clear door at 24 people/min/ft gives a theoretical door-flow time of about 3.47 minutes (500 / (24 × 6) = 3.472 min). The simulation uses the full clear width without a jamb deduction so it matches this benchmark; validate door flow separately from walking time.
+- Total-evacuation check: include walking time to the door plus queue service time. Room dimensions, crowd-to-door distance, initial crowd distribution, and pass/fail criterion are TBD.
+- Validate the average-density speed adjustment, exit queue formation and service rate, multiple-exit assignment and switching at the 5-second / 10% rule, and rejection of a starting region with no route or excessive average density.
 - Validate 50%, 90%, and 100% evacuation milestones, the remaining-people plot, and CSV/PNG exports.
 
 ## Out of scope
