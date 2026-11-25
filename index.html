@@ -702,7 +702,7 @@
               <h2 id="floorplan-title">Training Hall</h2>
               <p id="floorplan-description" class="card-description">Sample floor plan · layout units: feet</p>
             </div>
-            <span class="preview-label">Stage 4 flow</span>
+            <span class="preview-label">Stage 5 live results</span>
           </div>
 
           <div class="editor-toolbar" role="toolbar" aria-label="Floor plan editing tools">
@@ -808,8 +808,11 @@
               <p id="simulation-feedback" class="setup-feedback" role="status" aria-live="polite"></p>
               <div class="field" style="margin-top: 12px; margin-bottom: 0;">
                 <label for="playback-speed">Animation playback speed</label>
-                <select id="playback-speed" disabled>
-                  <option>1×</option>
+                <select id="playback-speed">
+                  <option value="0.5">0.5×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="2">2×</option>
+                  <option value="4">4×</option>
                 </select>
               </div>
             </div>
@@ -850,30 +853,27 @@
             <div>
               <p class="section-label">Progress</p>
               <h2 id="chart-title">People remaining over time</h2>
-              <p class="card-description">Live plotting will be added in a later stage.</p>
+              <p class="card-description">Remaining people by simulated time.</p>
             </div>
           </div>
           <div class="chart-wrap">
-            <svg viewBox="0 0 700 245" role="img" aria-labelledby="chart-graphic-title chart-graphic-desc">
-              <title id="chart-graphic-title">People-remaining plot placeholder</title>
-              <desc id="chart-graphic-desc">The live plot is not implemented in this stage.</desc>
+            <svg id="remaining-chart" viewBox="0 0 700 245" role="img" aria-labelledby="chart-graphic-title chart-graphic-desc">
+              <title id="chart-graphic-title">People remaining over simulated time</title>
+              <desc id="chart-graphic-desc">The chart shows the number of people remaining as simulated time passes.</desc>
               <rect width="700" height="245" fill="#fbfcfe" />
-              <g stroke="#e7edf4" stroke-width="1">
-                <line x1="75" y1="35" x2="670" y2="35" />
-                <line x1="75" y1="77" x2="670" y2="77" />
-                <line x1="75" y1="119" x2="670" y2="119" />
-                <line x1="75" y1="161" x2="670" y2="161" />
-                <line x1="75" y1="203" x2="670" y2="203" />
-              </g>
+              <g id="chart-grid" stroke="#e7edf4" stroke-width="1"></g>
               <g stroke="#8292a8" stroke-width="1.5">
                 <line x1="75" y1="28" x2="75" y2="203" />
                 <line x1="75" y1="203" x2="670" y2="203" />
               </g>
+              <g id="chart-tick-labels" fill="#65758b" font-family="system-ui, sans-serif" font-size="11"></g>
               <g fill="#65758b" font-family="system-ui, sans-serif" font-size="11">
                 <text x="372" y="232" text-anchor="middle">TIME (MINUTES)</text>
                 <text x="22" y="116" text-anchor="middle" transform="rotate(-90 22 116)">PEOPLE REMAINING</text>
               </g>
-              <text x="372" y="117" fill="#64748b" font-family="system-ui, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Plotting added in a later stage</text>
+              <path id="remaining-series" fill="none" stroke="#2457a7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></path>
+              <circle id="remaining-current-point" r="4" fill="#2457a7" stroke="#ffffff" stroke-width="2" aria-hidden="true"></circle>
+              <text id="chart-empty-state" x="372" y="117" fill="#64748b" font-family="system-ui, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Start the simulation to chart progress</text>
             </svg>
           </div>
         </section>
@@ -883,13 +883,13 @@
             <div>
               <p class="section-label">Key results</p>
               <h2 id="milestones-title">Evacuation milestones</h2>
-              <p class="card-description">Milestone times will be added in a later stage.</p>
+              <p class="card-description">Recorded when people cross an exit.</p>
             </div>
           </div>
           <ul class="milestone-list">
-            <li class="milestone"><span class="milestone-label">50% evacuated</span><span class="milestone-value">— min</span></li>
-            <li class="milestone"><span class="milestone-label">90% evacuated</span><span class="milestone-value">— min</span></li>
-            <li class="milestone"><span class="milestone-label">100% · total time</span><span class="milestone-value">— min</span></li>
+            <li class="milestone"><span class="milestone-label">50% evacuated</span><span id="milestone-50" class="milestone-value" aria-live="polite">— min</span></li>
+            <li class="milestone"><span class="milestone-label">90% evacuated</span><span id="milestone-90" class="milestone-value" aria-live="polite">— min</span></li>
+            <li class="milestone"><span class="milestone-label">100% · total time</span><span id="milestone-100" class="milestone-value" aria-live="polite">— min</span></li>
           </ul>
         </section>
       </div>
@@ -903,7 +903,7 @@
       </section>
     </main>
 
-    <p class="page-footnote">This simplified hydraulic model uses starting-area average density and exit-flow limits; it does not model changing local congestion or crowd interactions, and is for education, not engineering analysis. Live plots, milestones, and export are planned for later stages.</p>
+    <p class="page-footnote">This simplified hydraulic model uses starting-area average density and exit-flow limits; it does not model changing local congestion or crowd interactions, and is for education, not engineering analysis. CSV and PNG export are planned for a later stage.</p>
   </div>
   <script>
     (() => {
@@ -959,6 +959,16 @@
       const remainingCount = document.getElementById("remaining-count");
       const noticeTitle = document.getElementById("status-notice-title");
       const noticeText = document.getElementById("status-notice-text");
+      const playbackSpeedInput = document.getElementById("playback-speed");
+      const chartGrid = document.getElementById("chart-grid");
+      const chartTickLabels = document.getElementById("chart-tick-labels");
+      const chartDescription = document.getElementById("chart-graphic-desc");
+      const chartSeries = document.getElementById("remaining-series");
+      const chartCurrentPoint = document.getElementById("remaining-current-point");
+      const chartEmptyState = document.getElementById("chart-empty-state");
+      const milestone50 = document.getElementById("milestone-50");
+      const milestone90 = document.getElementById("milestone-90");
+      const milestone100 = document.getElementById("milestone-100");
 
       let items = sampleItems.map(item => ({ ...item }));
       let region = { ...room };
@@ -975,6 +985,7 @@
       const jamDensity = 1 / densityAreaConstant;
       const routeReassessmentInterval = 5;
       const routeSwitchImprovement = 0.1;
+      const plotSampleInterval = 1;
       let simulationState = "ready";
       let walkableGrid = null;
       let routeFields = [];
@@ -982,6 +993,11 @@
       let agents = [];
       let exitQueues = new Map();
       let elapsedSeconds = 0;
+      let evacuatedSoFar = 0;
+      let plotTotalPeople = 0;
+      let plotSamples = [];
+      let nextPlotSampleSeconds = plotSampleInterval;
+      let evacuationMilestones = { fifty: null, ninety: null, total: null };
       let frameRequest = null;
       let lastFrameTime = 0;
       let nextReassessmentSeconds = routeReassessmentInterval;
@@ -1000,6 +1016,129 @@
 
       function numberLabel(value) {
         return Number(value.toFixed(1)).toString();
+      }
+
+      function updateMilestoneDisplay() {
+        milestone50.textContent = evacuationMilestones.fifty === null
+          ? "— min"
+          : `${(evacuationMilestones.fifty / 60).toFixed(2)} min`;
+        milestone90.textContent = evacuationMilestones.ninety === null
+          ? "— min"
+          : `${(evacuationMilestones.ninety / 60).toFixed(2)} min`;
+        milestone100.textContent = evacuationMilestones.total === null
+          ? "— min"
+          : `${(evacuationMilestones.total / 60).toFixed(2)} min`;
+      }
+
+      function renderProgressPlot() {
+        const left = 75;
+        const right = 670;
+        const top = 35;
+        const bottom = 203;
+        const lastSample = plotSamples[plotSamples.length - 1];
+        const maxTimeSeconds = Math.max(30, Math.ceil((lastSample ? lastSample.time : 0) / 30) * 30);
+        const maxPeople = Math.max(1, plotTotalPeople);
+        const xPosition = time => left + time / maxTimeSeconds * (right - left);
+        const yPosition = remaining => bottom - remaining / maxPeople * (bottom - top);
+
+        chartGrid.replaceChildren();
+        chartTickLabels.replaceChildren();
+        for (let tick = 0; tick <= 4; tick += 1) {
+          const ratio = tick / 4;
+          const y = top + ratio * (bottom - top);
+          const people = Math.round(plotTotalPeople * (1 - ratio));
+          const x = left + ratio * (right - left);
+          const minutes = Number((maxTimeSeconds * ratio / 60).toFixed(2)).toString();
+          chartGrid.append(
+            svgElement("line", { x1: left, y1: y, x2: right, y2: y }),
+            svgElement("line", { x1: x, y1: top, x2: x, y2: bottom })
+          );
+          chartTickLabels.append(
+            svgElement("text", { x: left - 10, y: y + 4, "text-anchor": "end" }, String(people)),
+            svgElement("text", { x, y: bottom + 16, "text-anchor": "middle" }, minutes)
+          );
+        }
+
+        const path = plotSamples.map((sample, index) => {
+          const command = index === 0 ? "M" : "L";
+          return `${command}${xPosition(sample.time).toFixed(2)},${yPosition(sample.remaining).toFixed(2)}`;
+        }).join(" ");
+        chartSeries.setAttribute("d", path);
+        if (lastSample && plotTotalPeople > 0) {
+          chartCurrentPoint.setAttribute("cx", String(xPosition(lastSample.time)));
+          chartCurrentPoint.setAttribute("cy", String(yPosition(lastSample.remaining)));
+          chartCurrentPoint.style.display = "";
+        } else {
+          chartCurrentPoint.style.display = "none";
+        }
+
+        const hasProgress = plotSamples.length > 1 || elapsedSeconds > 0;
+        chartEmptyState.textContent = plotTotalPeople > 0
+          ? "Start the simulation to chart progress"
+          : "Complete a valid setup to chart progress";
+        chartEmptyState.style.display = hasProgress ? "none" : "";
+        chartDescription.textContent = plotTotalPeople > 0
+          ? `People remaining out of ${plotTotalPeople} by simulated time in minutes.`
+          : "The chart will display remaining people over simulated time after a valid setup.";
+      }
+
+      function resetLiveResults(totalPeople) {
+        evacuatedSoFar = 0;
+        plotTotalPeople = totalPeople;
+        plotSamples = totalPeople > 0 ? [{ time: 0, remaining: totalPeople }] : [];
+        nextPlotSampleSeconds = plotSampleInterval;
+        evacuationMilestones = { fifty: null, ninety: null, total: null };
+        updateMilestoneDisplay();
+        renderProgressPlot();
+      }
+
+      function recordEvacuationMilestones(eventTime) {
+        const thresholds = [
+          ["fifty", Math.ceil(plotTotalPeople * 0.5)],
+          ["ninety", Math.ceil(plotTotalPeople * 0.9)],
+          ["total", plotTotalPeople]
+        ];
+        let changed = false;
+        for (const [milestone, threshold] of thresholds) {
+          if (evacuationMilestones[milestone] === null && evacuatedSoFar >= threshold) {
+            evacuationMilestones[milestone] = eventTime;
+            changed = true;
+          }
+        }
+        if (changed) {
+          updateMilestoneDisplay();
+        }
+      }
+
+      function recordProgressSample() {
+        if (plotTotalPeople === 0 || elapsedSeconds < nextPlotSampleSeconds) {
+          return;
+        }
+        const lastSample = plotSamples[plotSamples.length - 1];
+        if (elapsedSeconds - lastSample.time > 0.001) {
+          plotSamples.push({
+            time: elapsedSeconds,
+            remaining: plotTotalPeople - evacuatedSoFar
+          });
+        }
+        while (nextPlotSampleSeconds <= elapsedSeconds) {
+          nextPlotSampleSeconds += plotSampleInterval;
+        }
+        renderProgressPlot();
+      }
+
+      function recordFinalProgressSample() {
+        if (plotTotalPeople === 0) {
+          return;
+        }
+        const lastSample = plotSamples[plotSamples.length - 1];
+        const finalSample = { time: elapsedSeconds, remaining: plotTotalPeople - evacuatedSoFar };
+        if (lastSample && Math.abs(lastSample.time - elapsedSeconds) <= 0.001) {
+          plotSamples[plotSamples.length - 1] = finalSample;
+        } else {
+          plotSamples.push(finalSample);
+        }
+        renderProgressPlot();
       }
 
       function makeExitShape(item) {
@@ -1605,6 +1744,7 @@
         countInput.disabled = locked;
         speedInput.disabled = locked;
         doorWidthInput.disabled = locked;
+        playbackSpeedInput.disabled = simulationState === "complete";
         startButton.disabled = !setupValid || simulationState === "running" || simulationState === "complete";
         startButton.textContent = simulationState === "paused" ? "Resume" : "Start";
         pauseButton.disabled = simulationState !== "running";
@@ -1656,6 +1796,7 @@
         walkableGrid = buildWalkableGrid();
         routeFields = [];
         initialAgents = [];
+        agents = [];
         crowdLayer.replaceChildren();
         queueLayer.replaceChildren();
         exitQueues = new Map();
@@ -1715,13 +1856,13 @@
         if (setupValid) {
           renderCrowd();
         }
+        resetLiveResults(setupValid ? initialAgents.length : 0);
         setSimulationState("ready");
       }
 
       function updateCounters() {
-        const evacuated = agents.reduce((total, agent) => total + Number(agent.evacuated), 0);
-        evacuatedCount.textContent = String(evacuated);
-        remainingCount.textContent = String(agents.length - evacuated);
+        evacuatedCount.textContent = String(evacuatedSoFar);
+        remainingCount.textContent = String(agents.length - evacuatedSoFar);
         elapsedTime.textContent = `${elapsedSeconds.toFixed(1)} s`;
         renderQueueIndicators();
       }
@@ -1812,6 +1953,8 @@
             queue.serviceAccumulator -= queue.serviceHeadway;
             const agent = queue.people.shift();
             agent.evacuated = true;
+            evacuatedSoFar += 1;
+            recordEvacuationMilestones(Math.max(0, elapsedSeconds - queue.serviceAccumulator));
             agent.element.remove();
           }
           if (queue.people.length === 0) {
@@ -1824,7 +1967,8 @@
         if (simulationState !== "running") {
           return;
         }
-        const deltaSeconds = Math.min((timestamp - lastFrameTime) / 1000, 0.1);
+        const deltaSeconds = Math.min((timestamp - lastFrameTime) / 1000, 0.1)
+          * Number(playbackSpeedInput.value);
         lastFrameTime = timestamp;
         elapsedSeconds += deltaSeconds;
 
@@ -1871,7 +2015,9 @@
         }
 
         updateCounters();
+        recordProgressSample();
         if (agents.every(agent => agent.evacuated)) {
+          recordFinalProgressSample();
           setSimulationState("complete");
           return;
         }
@@ -1905,6 +2051,7 @@
         elapsedSeconds = 0;
         nextReassessmentSeconds = routeReassessmentInterval;
         renderCrowd();
+        resetLiveResults(agents.length);
         updateCounters();
         setSimulationState("ready");
       }
@@ -2030,6 +2177,11 @@
 
       countInput.addEventListener("input", refreshSimulationSetup);
       speedInput.addEventListener("input", refreshSimulationSetup);
+      playbackSpeedInput.addEventListener("change", () => {
+        if (simulationState === "running") {
+          lastFrameTime = performance.now();
+        }
+      });
       startButton.addEventListener("click", startSimulation);
       pauseButton.addEventListener("click", pauseSimulation);
       resetButton.addEventListener("click", resetSimulation);

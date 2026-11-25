@@ -8,7 +8,7 @@ Provide a single-file browser app, implemented in the top-level `index.html`, to
 - Layout content: walls, exits (including door widths), and obstacles such as rows of seats; dimensions and door widths are in feet
 - Crowd size (100 to 2,000 people) and initial placement, randomized within a user-selected region
 - User-configurable walking speed from 0.5 to 3.0 miles per hour (mph), default 2.7 mph
-- Simulation playback controls (start, pause, reset, and animation playback speed); playback speed affects animation only, while walking speed affects simulation movement
+- Simulation playback controls (start, pause, reset, and animation playback speed); playback speed changes wall-clock pacing but not modeled walking speed or simulated evacuation times
 
 ## Calculations
 - Find walkable routes around walls and seat blocks on a 0.5-foot grid; require every walkable cell in the starting region to reach at least one exit
@@ -34,7 +34,9 @@ Educational and approachable, using simple visual cues. Keep the floor plan as t
 - Door-flow check: 500 people through a 6 ft clear door at 24 people/min/ft gives a theoretical door-flow time of about 3.47 minutes (500 / (24 × 6) = 3.472 min). The simulation uses the full clear width without a jamb deduction so it matches this benchmark; validate door flow separately from walking time.
 - Total-evacuation check: include walking time to the door plus queue service time. Room dimensions, crowd-to-door distance, initial crowd distribution, and pass/fail criterion are TBD.
 - Validate the average-density speed adjustment, exit queue formation and service rate, multiple-exit assignment and switching at the 5-second / 10% rule, and rejection of a starting region with no route or excessive average density.
-- Validate 50%, 90%, and 100% evacuation milestones, the remaining-people plot, and CSV/PNG exports.
+- Validate the live remaining-people plot and 50%, 90%, and 100% milestone times at exit crossings; reset clears both.
+- Verify pause stops simulated time and playback speed changes wall-clock pacing without changing simulated walking speed or evacuation times.
+- Validate CSV/PNG exports.
 
 ## Out of scope
 Stairs and elevation changes, built-in real-venue presets (users may draw their own venue layouts), and automated exit-layout optimization.
