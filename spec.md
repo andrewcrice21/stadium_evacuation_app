@@ -7,7 +7,7 @@ Provide a single-file browser app, implemented in the top-level `index.html`, to
 - Floor plan: select a built-in sample, draw/edit a custom layout, import a structured layout, or import an image for tracing/editing; an imported image must be traced into editable layout geometry before simulation (supported file formats TBD)
 - Layout content: walls, exits (including door widths), and obstacles such as rows of seats; dimensions and door widths are in feet
 - Crowd size (100 to 2,000 people) and initial placement, randomized within a user-selected region
-- User-configurable walking speed (units, allowed range, and default TBD)
+- User-configurable walking speed in miles per hour (mph) (allowed range and default TBD)
 - Simulation playback controls (start, pause, reset, and animation playback speed); playback speed affects animation only, while walking speed affects simulation movement
 
 ## Calculations
