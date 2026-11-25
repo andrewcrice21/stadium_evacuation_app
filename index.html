@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A visual mockup for a stadium evacuation simulator.">
+  <meta name="description" content="A single-file stadium evacuation simulator with editable floor plans and basic route movement.">
   <title>Stadium Evacuation Simulator</title>
   <style>
     :root {
@@ -393,6 +393,21 @@
       display: none;
     }
 
+    .setup-feedback {
+      margin: 0 0 10px;
+      color: #155e53;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .setup-feedback:empty {
+      display: none;
+    }
+
+    .setup-feedback.is-invalid {
+      color: #9c2f2f;
+    }
+
     input[aria-invalid="true"] {
       border-color: #b83c3c;
       background: #fff8f8;
@@ -669,14 +684,14 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">SE</div>
         <div>
-          <p class="eyebrow">Evacuation lab · page mockup</p>
+          <p class="eyebrow">Evacuation lab · routing prototype</p>
           <h1>Stadium Evacuation Simulator</h1>
         </div>
       </div>
       <div id="scenario-badge" class="scenario-badge">Sample floor plan loaded · not running</div>
     </header>
 
-    <p class="intro">Set up a venue layout and crowd before running an evacuation. Floor-plan editing and setup inputs are active; simulation calculations and playback are not yet implemented.</p>
+    <p class="intro">Set up a venue layout and crowd, then watch people follow walkable routes to a single exit. This stage uses constant-speed movement without crowding or door queues.</p>
 
     <main>
       <div class="workspace">
@@ -687,7 +702,7 @@
               <h2 id="floorplan-title">Training Hall</h2>
               <p id="floorplan-description" class="card-description">Sample floor plan · layout units: feet</p>
             </div>
-            <span class="preview-label">Setup editor</span>
+            <span class="preview-label">Stage 3 movement</span>
           </div>
 
           <div class="editor-toolbar" role="toolbar" aria-label="Floor plan editing tools">
@@ -708,7 +723,7 @@
           <figure id="map-frame" class="map-frame">
             <svg id="floorplan-map" viewBox="0 0 80 50" role="group" aria-labelledby="map-title map-desc" tabindex="0">
               <title id="map-title">Editable Training Hall floor plan</title>
-              <desc id="map-desc">A 70 by 40 foot rectangular room on a five-foot grid, with editable seating and an exit. Draw or select a crowd region. No evacuation movement or route calculation is performed.</desc>
+              <desc id="map-desc">A 70 by 40 foot rectangular room with editable seating, walls, exits, and a starting region. People move along routes on a half-foot grid.</desc>
               <defs>
                 <pattern id="floor-grid" width="5" height="5" patternUnits="userSpaceOnUse">
                   <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#e2eaf1" stroke-width="0.08" />
@@ -721,6 +736,7 @@
               <text x="5" y="3.3" fill="#52657d" font-family="system-ui, sans-serif" font-size="1.3" font-weight="700">TRAINING HALL · 70 × 40 FT</text>
               <g id="layout-items"></g>
               <g id="region-layer" pointer-events="none"></g>
+              <g id="crowd-layer" pointer-events="none"></g>
               <g id="drawing-preview" pointer-events="none"></g>
             </svg>
           </figure>
@@ -732,7 +748,7 @@
             <li class="legend-item"><span class="legend-swatch exit" aria-hidden="true"></span>Exit</li>
             <li class="legend-item"><span class="legend-swatch region" aria-hidden="true"></span>Starting region</li>
           </ul>
-          <p class="hint">Grid spacing and room dimensions are shown in feet. The small people markers are illustrative only; random placement is not generated at this stage.</p>
+          <p class="hint">Routing uses a 0.5-foot grid. People are placed randomly in walkable cells in the selected starting region.</p>
         </section>
 
         <aside class="side-stack" aria-label="Controls and live status">
@@ -742,7 +758,7 @@
                 <p class="section-label">Setup</p>
                 <h2 id="controls-title">Scenario controls</h2>
               </div>
-              <span class="preview-label">Preview only</span>
+              <span class="preview-label">Single-exit model</span>
             </div>
 
             <div class="control-group">
@@ -767,12 +783,13 @@
                 <input id="crowd-size" type="number" min="100" max="2000" step="1" value="500" aria-describedby="crowd-size-error">
               </div>
               <p id="crowd-size-error" class="field-error" aria-live="polite"></p>
-              <p class="hint">Choose a region on the plan; crowd placement will be randomized there in a later stage.</p>
+              <p class="hint">People are placed randomly in walkable cells in the selected region.</p>
               <div class="field">
                 <label for="walking-speed">Walking speed (mph)</label>
-                <input id="walking-speed" type="number" step="any" inputmode="decimal" aria-describedby="walking-speed-hint">
+                <input id="walking-speed" type="number" min="0.5" max="3" step="0.1" value="2.7" inputmode="decimal" aria-describedby="walking-speed-hint walking-speed-error">
               </div>
-              <p id="walking-speed-hint" class="hint">Allowed range and default are TBD. This value is recorded for setup only and is not used in calculations.</p>
+              <p id="walking-speed-hint" class="hint">Choose a constant walking speed from 0.5 to 3.0 mph. Density slowdown and door queues are not included yet.</p>
+              <p id="walking-speed-error" class="field-error" aria-live="polite"></p>
               <div class="field">
                 <label for="exit-width">New exit width (feet)</label>
                 <input id="exit-width" type="number" step="any" value="6">
@@ -783,10 +800,11 @@
             <div class="control-group">
               <h3>Playback</h3>
               <div class="button-row">
-                <button class="primary" type="button" disabled>Start</button>
-                <button type="button" disabled>Pause</button>
-                <button type="button" disabled>Reset</button>
+                <button id="start-simulation" class="primary" type="button">Start</button>
+                <button id="pause-simulation" type="button" disabled>Pause</button>
+                <button id="reset-simulation" type="button" disabled>Reset</button>
               </div>
+              <p id="simulation-feedback" class="setup-feedback" role="status" aria-live="polite"></p>
               <div class="field" style="margin-top: 12px; margin-bottom: 0;">
                 <label for="playback-speed">Animation playback speed</label>
                 <select id="playback-speed" disabled>
@@ -806,20 +824,20 @@
             <div class="status-grid">
               <div class="stat">
                 <span class="stat-label">Elapsed</span>
-                <span class="stat-value">—:—</span>
+                <span id="elapsed-time" class="stat-value">0.0 s</span>
               </div>
               <div class="stat">
                 <span class="stat-label">Evacuated</span>
-                <span class="stat-value">— / <span id="status-crowd-total">500</span></span>
+                <span class="stat-value"><span id="evacuated-count">0</span> / <span id="status-crowd-total">500</span></span>
               </div>
               <div class="stat">
                 <span class="stat-label">Remaining</span>
-                <span class="stat-value">—</span>
+                <span id="remaining-count" class="stat-value">500</span>
               </div>
             </div>
             <div class="notice">
               <div aria-hidden="true">i</div>
-              <div><strong>Simulation not started</strong>Live values will appear here during a run.</div>
+              <div><strong id="status-notice-title">Ready to simulate</strong><span id="status-notice-text">Start to move people toward the exit.</span></div>
             </div>
           </section>
         </aside>
@@ -831,13 +849,13 @@
             <div>
               <p class="section-label">Progress</p>
               <h2 id="chart-title">People remaining over time</h2>
-              <p class="card-description">The plot will update during a simulation.</p>
+              <p class="card-description">Live plotting will be added in a later stage.</p>
             </div>
           </div>
           <div class="chart-wrap">
             <svg viewBox="0 0 700 245" role="img" aria-labelledby="chart-graphic-title chart-graphic-desc">
-              <title id="chart-graphic-title">Empty people-remaining chart preview</title>
-              <desc id="chart-graphic-desc">A chart frame with time in minutes on the horizontal axis and people remaining on the vertical axis. No data is plotted because the simulation has not started.</desc>
+              <title id="chart-graphic-title">People-remaining plot placeholder</title>
+              <desc id="chart-graphic-desc">The live plot is not implemented in this stage.</desc>
               <rect width="700" height="245" fill="#fbfcfe" />
               <g stroke="#e7edf4" stroke-width="1">
                 <line x1="75" y1="35" x2="670" y2="35" />
@@ -854,7 +872,7 @@
                 <text x="372" y="232" text-anchor="middle">TIME (MINUTES)</text>
                 <text x="22" y="116" text-anchor="middle" transform="rotate(-90 22 116)">PEOPLE REMAINING</text>
               </g>
-              <text x="372" y="117" fill="#64748b" font-family="system-ui, sans-serif" font-size="13" font-weight="700" text-anchor="middle">No simulation data yet</text>
+              <text x="372" y="117" fill="#64748b" font-family="system-ui, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Plotting added in a later stage</text>
             </svg>
           </div>
         </section>
@@ -864,7 +882,7 @@
             <div>
               <p class="section-label">Key results</p>
               <h2 id="milestones-title">Evacuation milestones</h2>
-              <p class="card-description">Times are recorded when people cross an exit.</p>
+              <p class="card-description">Milestone times will be added in a later stage.</p>
             </div>
           </div>
           <ul class="milestone-list">
@@ -884,7 +902,7 @@
       </section>
     </main>
 
-    <p class="page-footnote">Floor-plan and crowd setup are active. Simulation calculations and results are placeholders for a later stage.</p>
+    <p class="page-footnote">This stage models walking routes and constant-speed movement only; density effects, queues, live plots, and export are not included.</p>
   </div>
   <script>
     (() => {
@@ -912,6 +930,7 @@
       const mapFrame = document.getElementById("map-frame");
       const itemLayer = document.getElementById("layout-items");
       const regionLayer = document.getElementById("region-layer");
+      const crowdLayer = document.getElementById("crowd-layer");
       const previewLayer = document.getElementById("drawing-preview");
       const toolButtons = [...document.querySelectorAll("[data-tool]")];
       const deleteButton = document.getElementById("delete-selected");
@@ -921,6 +940,7 @@
       const countInput = document.getElementById("crowd-size");
       const countError = document.getElementById("crowd-size-error");
       const speedInput = document.getElementById("walking-speed");
+      const speedError = document.getElementById("walking-speed-error");
       const doorWidthInput = document.getElementById("exit-width");
       const doorWidthError = document.getElementById("exit-width-error");
       const crowdTotal = document.getElementById("status-crowd-total");
@@ -928,6 +948,15 @@
       const layoutTitle = document.getElementById("floorplan-title");
       const layoutDescription = document.getElementById("floorplan-description");
       const scenarioBadge = document.getElementById("scenario-badge");
+      const startButton = document.getElementById("start-simulation");
+      const pauseButton = document.getElementById("pause-simulation");
+      const resetButton = document.getElementById("reset-simulation");
+      const simulationFeedback = document.getElementById("simulation-feedback");
+      const elapsedTime = document.getElementById("elapsed-time");
+      const evacuatedCount = document.getElementById("evacuated-count");
+      const remainingCount = document.getElementById("remaining-count");
+      const noticeTitle = document.getElementById("status-notice-title");
+      const noticeText = document.getElementById("status-notice-text");
 
       let items = sampleItems.map(item => ({ ...item }));
       let region = { x: 30, y: 18, width: 20, height: 9 };
@@ -936,6 +965,15 @@
       let drawing = null;
       let nextItemId = 14;
       let nextExitNumber = 2;
+      const gridStep = 0.5;
+      let simulationState = "ready";
+      let routeField = null;
+      let initialAgents = [];
+      let agents = [];
+      let elapsedSeconds = 0;
+      let frameRequest = null;
+      let lastFrameTime = 0;
+      let setupValid = false;
 
       function svgElement(tag, attributes = {}, text = "") {
         const element = document.createElementNS(svgNamespace, tag);
@@ -1086,21 +1124,6 @@
           }, "START REGION")
         );
 
-        const markerPositions = [
-          [0.27, 0.48], [0.43, 0.48], [0.59, 0.48], [0.75, 0.48],
-          [0.35, 0.72], [0.51, 0.72], [0.67, 0.72]
-        ];
-        for (const [xRatio, yRatio] of markerPositions) {
-          regionLayer.append(svgElement("circle", {
-            cx: region.x + region.width * xRatio,
-            cy: region.y + region.height * yRatio,
-            r: 0.52,
-            fill: "#2457a7",
-            stroke: "#ffffff",
-            "stroke-width": 0.18
-          }));
-        }
-
         regionSummary.textContent = `Crowd region: x ${numberLabel(region.x)} ft, y ${numberLabel(region.y)} ft; ${numberLabel(region.width)} ft × ${numberLabel(region.height)} ft.`;
       }
 
@@ -1211,6 +1234,7 @@
         markCustomLayout();
         renderItems();
         instructions.textContent = `${item.label} added on the ${closest.side} wall; width ${numberLabel(width)} ft.`;
+        refreshSimulationSetup();
       }
 
       function validateCrowdCount() {
@@ -1226,6 +1250,407 @@
         countError.textContent = message;
         crowdTotal.textContent = message ? "—" : String(value);
         return !message;
+      }
+
+      function validateWalkingSpeed() {
+        const value = Number(speedInput.value);
+        const valid = speedInput.value.trim() !== ""
+          && Number.isFinite(value)
+          && value >= 0.5
+          && value <= 3;
+        speedError.textContent = valid ? "" : "Walking speed must be from 0.5 to 3.0 mph.";
+        speedInput.setAttribute("aria-invalid", String(!valid));
+        return valid;
+      }
+
+      function cellCenter(index, columns) {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        return {
+          x: room.x + (column + 0.5) * gridStep,
+          y: room.y + (row + 0.5) * gridStep
+        };
+      }
+
+      function pointToSegmentDistance(point, start, end) {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const lengthSquared = dx * dx + dy * dy;
+        if (lengthSquared === 0) {
+          return Math.hypot(point.x - start.x, point.y - start.y);
+        }
+        const projection = clamp(
+          ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared,
+          0,
+          1
+        );
+        return Math.hypot(point.x - (start.x + projection * dx), point.y - (start.y + projection * dy));
+      }
+
+      function isWalkable(point) {
+        for (const item of items) {
+          if (item.type === "seat"
+            && point.x >= item.x && point.x <= item.x + item.width
+            && point.y >= item.y && point.y <= item.y + item.height) {
+            return false;
+          }
+          if (item.type === "wall") {
+            const distance = pointToSegmentDistance(
+              point,
+              { x: item.x1, y: item.y1 },
+              { x: item.x2, y: item.y2 }
+            );
+            if (distance <= gridStep / 2) {
+              return false;
+            }
+          }
+        }
+        return true;
+      }
+
+      function findRouteField(exit) {
+        const columns = Math.round(room.width / gridStep);
+        const rows = Math.round(room.height / gridStep);
+        const size = columns * rows;
+        const walkable = new Uint8Array(size);
+        const distance = new Int32Array(size);
+        const nextTowardExit = new Int32Array(size);
+        const queue = new Uint32Array(size);
+        distance.fill(-1);
+        nextTowardExit.fill(-1);
+
+        for (let index = 0; index < size; index += 1) {
+          if (isWalkable(cellCenter(index, columns))) {
+            walkable[index] = 1;
+          }
+        }
+
+        const start = exit.position - exit.width / 2;
+        const end = exit.position + exit.width / 2;
+        const exitCells = [];
+        for (let index = 0; index < size; index += 1) {
+          const point = cellCenter(index, columns);
+          let alongOpening;
+          let onBoundary;
+          if (exit.side === "east") {
+            alongOpening = point.y >= start && point.y <= end;
+            onBoundary = Math.floor(index % columns) === columns - 1;
+          } else if (exit.side === "west") {
+            alongOpening = point.y >= start && point.y <= end;
+            onBoundary = index % columns === 0;
+          } else if (exit.side === "north") {
+            alongOpening = point.x >= start && point.x <= end;
+            onBoundary = Math.floor(index / columns) === 0;
+          } else {
+            alongOpening = point.x >= start && point.x <= end;
+            onBoundary = Math.floor(index / columns) === rows - 1;
+          }
+          if (onBoundary && alongOpening && walkable[index]) {
+            exitCells.push(index);
+          }
+        }
+
+        if (exitCells.length === 0) {
+          return {
+            error: "The exit is blocked or too narrow to represent on the 0.5-foot routing grid."
+          };
+        }
+
+        let queueHead = 0;
+        let queueTail = 0;
+        for (const index of exitCells) {
+          distance[index] = 0;
+          queue[queueTail++] = index;
+        }
+
+        while (queueHead < queueTail) {
+          const current = queue[queueHead++];
+          const column = current % columns;
+          const neighbors = [];
+          if (column > 0) neighbors.push(current - 1);
+          if (column < columns - 1) neighbors.push(current + 1);
+          if (current >= columns) neighbors.push(current - columns);
+          if (current + columns < size) neighbors.push(current + columns);
+
+          for (const neighbor of neighbors) {
+            if (!walkable[neighbor] || distance[neighbor] !== -1) {
+              continue;
+            }
+            distance[neighbor] = distance[current] + 1;
+            nextTowardExit[neighbor] = current;
+            queue[queueTail++] = neighbor;
+          }
+        }
+
+        const regionCells = [];
+        if (region) {
+          for (let index = 0; index < size; index += 1) {
+            const point = cellCenter(index, columns);
+            if (point.x >= region.x && point.x <= region.x + region.width
+              && point.y >= region.y && point.y <= region.y + region.height
+              && walkable[index]) {
+              regionCells.push(index);
+            }
+          }
+        }
+        if (regionCells.length === 0) {
+          return { error: "The selected crowd region contains no walkable cells on the 0.5-foot grid." };
+        }
+        if (regionCells.some(index => distance[index] < 0)) {
+          return { error: "The selected crowd region contains walkable cells with no route to the exit." };
+        }
+
+        return { columns, distance, nextTowardExit, regionCells, exit };
+      }
+
+      function exitTarget(exit, boundaryPoint) {
+        const outside = 0.75;
+        if (exit.side === "east") return { x: room.x + room.width + outside, y: boundaryPoint.y };
+        if (exit.side === "west") return { x: room.x - outside, y: boundaryPoint.y };
+        if (exit.side === "north") return { x: boundaryPoint.x, y: room.y - outside };
+        return { x: boundaryPoint.x, y: room.y + room.height + outside };
+      }
+
+      function buildAgentPath(startIndex, route) {
+        const path = [];
+        let index = startIndex;
+        let steps = 0;
+        while (route.nextTowardExit[index] !== -1) {
+          index = route.nextTowardExit[index];
+          path.push(cellCenter(index, route.columns));
+          steps += 1;
+          if (steps > route.distance.length) {
+            return null;
+          }
+        }
+        path.push(exitTarget(route.exit, cellCenter(index, route.columns)));
+        return path;
+      }
+
+      function createAgent(data) {
+        const element = svgElement("circle", {
+          cx: data.x,
+          cy: data.y,
+          r: 0.16,
+          fill: "#2457a7",
+          stroke: "#ffffff",
+          "stroke-width": 0.06,
+          "aria-hidden": "true"
+        });
+        crowdLayer.append(element);
+        return {
+          x: data.x,
+          y: data.y,
+          path: data.path.map(point => ({ ...point })),
+          targetIndex: 0,
+          speed: data.speed,
+          element,
+          evacuated: false
+        };
+      }
+
+      function createInitialAgents(route, count, speed) {
+        const cells = [...route.regionCells];
+        for (let index = cells.length - 1; index > 0; index -= 1) {
+          const swapIndex = Math.floor(Math.random() * (index + 1));
+          [cells[index], cells[swapIndex]] = [cells[swapIndex], cells[index]];
+        }
+
+        const created = [];
+        for (let index = 0; index < count; index += 1) {
+          const cell = cells[index % cells.length];
+          const position = cellCenter(cell, route.columns);
+          const path = buildAgentPath(cell, route);
+          if (!path) {
+            return { error: "A route could not be constructed for a person in the selected region." };
+          }
+          created.push({
+            x: position.x,
+            y: position.y,
+            path,
+            speed: speed * 5280 / 3600
+          });
+        }
+        return { agents: created };
+      }
+
+      function renderCrowd() {
+        crowdLayer.replaceChildren();
+        agents = initialAgents.map(createAgent);
+      }
+
+      function setSimulationState(nextState) {
+        simulationState = nextState;
+        const locked = simulationState !== "ready";
+        for (const button of toolButtons) button.disabled = locked;
+        deleteButton.disabled = locked || selectedItemId === null;
+        restoreButton.disabled = locked;
+        layoutSelect.disabled = locked;
+        countInput.disabled = locked;
+        speedInput.disabled = locked;
+        doorWidthInput.disabled = locked;
+        startButton.disabled = !setupValid || simulationState === "running" || simulationState === "complete";
+        startButton.textContent = simulationState === "paused" ? "Resume" : "Start";
+        pauseButton.disabled = simulationState !== "running";
+        resetButton.disabled = simulationState === "ready";
+
+        const titles = {
+          ready: "Ready to simulate",
+          running: "Simulation running",
+          paused: "Simulation paused",
+          complete: "Simulation complete"
+        };
+        const messages = {
+          ready: setupValid ? "Start to move people toward the exit." : "Correct the setup issues to enable Start.",
+          running: "People walk at constant speed; door queues are not modeled.",
+          paused: "Resume or reset the movement.",
+          complete: "Everyone has reached the exit."
+        };
+        noticeTitle.textContent = titles[simulationState];
+        noticeText.textContent = messages[simulationState];
+        if (simulationState === "running") {
+          scenarioBadge.textContent = "Simulation running";
+        } else if (simulationState === "paused") {
+          scenarioBadge.textContent = "Simulation paused";
+        } else if (simulationState === "complete") {
+          scenarioBadge.textContent = "Simulation complete";
+        } else {
+          scenarioBadge.textContent = setupValid
+            ? `${layoutSelect.value === "sample" ? "Sample floor plan" : "Custom layout"} · ready`
+            : `${layoutSelect.value === "sample" ? "Sample floor plan" : "Custom layout"} · setup needed`;
+        }
+      }
+
+      function refreshSimulationSetup() {
+        if (simulationState !== "ready") {
+          return;
+        }
+        const errors = [];
+        const countValid = validateCrowdCount();
+        const speedValid = validateWalkingSpeed();
+        if (!countValid) errors.push(countError.textContent);
+        if (!speedValid) errors.push(speedError.textContent);
+        if (!region) errors.push("Set a starting crowd region.");
+        const exits = items.filter(item => item.type === "exit");
+        if (exits.length !== 1) {
+          errors.push("Stage 3 requires exactly one exit.");
+        }
+
+        routeField = null;
+        initialAgents = [];
+        crowdLayer.replaceChildren();
+        if (region && exits.length === 1) {
+          const route = findRouteField(exits[0]);
+          if (route.error) {
+            errors.push(route.error);
+          } else {
+            routeField = route;
+          }
+        }
+
+        if (errors.length === 0 && routeField) {
+          const initial = createInitialAgents(routeField, Number(countInput.value), Number(speedInput.value));
+          if (initial.error) {
+            errors.push(initial.error);
+          } else {
+            initialAgents = initial.agents;
+          }
+        }
+
+        setupValid = errors.length === 0 && initialAgents.length > 0;
+        elapsedSeconds = 0;
+        elapsedTime.textContent = "0.0 s";
+        evacuatedCount.textContent = "0";
+        remainingCount.textContent = countValid ? countInput.value : "—";
+        simulationFeedback.textContent = setupValid
+          ? `Ready: ${countInput.value} people routed to ${exits[0].label}. No density slowdown or door queue is applied.`
+          : [...new Set(errors)].join(" ");
+        simulationFeedback.classList.toggle("is-invalid", !setupValid);
+        if (setupValid) {
+          renderCrowd();
+        }
+        setSimulationState("ready");
+      }
+
+      function updateCounters() {
+        const evacuated = agents.reduce((total, agent) => total + Number(agent.evacuated), 0);
+        evacuatedCount.textContent = String(evacuated);
+        remainingCount.textContent = String(agents.length - evacuated);
+        elapsedTime.textContent = `${elapsedSeconds.toFixed(1)} s`;
+      }
+
+      function animateSimulation(timestamp) {
+        if (simulationState !== "running") {
+          return;
+        }
+        const deltaSeconds = Math.min((timestamp - lastFrameTime) / 1000, 0.1);
+        lastFrameTime = timestamp;
+        elapsedSeconds += deltaSeconds;
+
+        for (const agent of agents) {
+          if (agent.evacuated) {
+            continue;
+          }
+          let distanceLeft = agent.speed * deltaSeconds;
+          while (distanceLeft > 0 && agent.targetIndex < agent.path.length) {
+            const target = agent.path[agent.targetIndex];
+            const dx = target.x - agent.x;
+            const dy = target.y - agent.y;
+            const distance = Math.hypot(dx, dy);
+            if (distance <= distanceLeft || distance < 0.0001) {
+              agent.x = target.x;
+              agent.y = target.y;
+              distanceLeft -= distance;
+              agent.targetIndex += 1;
+              if (agent.targetIndex === agent.path.length) {
+                agent.evacuated = true;
+                agent.element.remove();
+              }
+            } else {
+              agent.x += dx / distance * distanceLeft;
+              agent.y += dy / distance * distanceLeft;
+              distanceLeft = 0;
+            }
+          }
+          if (!agent.evacuated) {
+            agent.element.setAttribute("cx", String(agent.x));
+            agent.element.setAttribute("cy", String(agent.y));
+          }
+        }
+
+        updateCounters();
+        if (agents.every(agent => agent.evacuated)) {
+          setSimulationState("complete");
+          return;
+        }
+        frameRequest = requestAnimationFrame(animateSimulation);
+      }
+
+      function startSimulation() {
+        if (!setupValid || simulationState === "running" || simulationState === "complete") {
+          return;
+        }
+        setSimulationState("running");
+        lastFrameTime = performance.now();
+        frameRequest = requestAnimationFrame(animateSimulation);
+      }
+
+      function pauseSimulation() {
+        if (simulationState !== "running") {
+          return;
+        }
+        if (frameRequest !== null) cancelAnimationFrame(frameRequest);
+        frameRequest = null;
+        setSimulationState("paused");
+      }
+
+      function resetSimulation() {
+        if (frameRequest !== null) cancelAnimationFrame(frameRequest);
+        frameRequest = null;
+        elapsedSeconds = 0;
+        renderCrowd();
+        updateCounters();
+        setSimulationState("ready");
       }
 
       function setTool(tool) {
@@ -1294,6 +1719,7 @@
           markCustomLayout();
           renderItems();
           instructions.textContent = "Wall added. Select / delete can remove it.";
+          refreshSimulationSetup();
           return;
         }
 
@@ -1305,7 +1731,8 @@
         if (completed.tool === "region") {
           region = rect;
           renderRegion();
-          instructions.textContent = "Initial crowd region set. No crowd is generated until a later stage.";
+          instructions.textContent = "Initial crowd region set.";
+          refreshSimulationSetup();
           return;
         }
 
@@ -1315,6 +1742,7 @@
         markCustomLayout();
         renderItems();
         instructions.textContent = "Seat block added. Select / delete can remove it.";
+        refreshSimulationSetup();
       }
 
       function restoreSample() {
@@ -1324,7 +1752,7 @@
         region = { x: 30, y: 18, width: 20, height: 9 };
         selectedItemId = null;
         countInput.value = "500";
-        speedInput.value = "";
+        speedInput.value = "2.7";
         doorWidthInput.value = "6";
         doorWidthError.textContent = "";
         doorWidthInput.removeAttribute("aria-invalid");
@@ -1336,13 +1764,19 @@
         renderItems();
         renderRegion();
         setTool("select");
+        simulationState = "ready";
+        refreshSimulationSetup();
       }
 
       for (const button of toolButtons) {
         button.addEventListener("click", () => setTool(button.dataset.tool));
       }
 
-      countInput.addEventListener("input", validateCrowdCount);
+      countInput.addEventListener("input", refreshSimulationSetup);
+      speedInput.addEventListener("input", refreshSimulationSetup);
+      startButton.addEventListener("click", startSimulation);
+      pauseButton.addEventListener("click", pauseSimulation);
+      resetButton.addEventListener("click", resetSimulation);
       deleteButton.addEventListener("click", () => {
         if (selectedItemId === null) {
           return;
@@ -1352,6 +1786,7 @@
         markCustomLayout();
         renderItems();
         instructions.textContent = "Selected item removed.";
+        refreshSimulationSetup();
       });
       restoreButton.addEventListener("click", restoreSample);
       layoutSelect.addEventListener("change", () => {
@@ -1370,10 +1805,11 @@
         renderItems();
         renderRegion();
         setTool("seat");
+        refreshSimulationSetup();
       });
 
       floorplanMap.addEventListener("pointerdown", event => {
-        if (event.button !== 0) {
+        if (event.button !== 0 || simulationState !== "ready") {
           return;
         }
         const point = pointFromEvent(event);
@@ -1415,6 +1851,9 @@
       });
 
       floorplanMap.addEventListener("keydown", event => {
+        if (simulationState !== "ready") {
+          return;
+        }
         const itemElement = event.target.closest("[data-item-id]");
         if ((event.key === "Enter" || event.key === " ") && itemElement && currentTool === "select") {
           event.preventDefault();
