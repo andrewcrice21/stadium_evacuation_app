@@ -4,7 +4,21 @@
 Provide a single-file browser app, implemented in the top-level `index.html`, to simulate crowd evacuation from a venue floor plan. Animate movement and door queuing while tracking evacuation milestones and remaining crowd over time.
 
 ## Inputs
-- Floor plan: select a built-in sample, draw/edit a custom layout, import a structured layout, or import an image for tracing/editing; an imported image must be traced into editable layout geometry before simulation (supported file formats TBD)
+- Floor plan: select a built-in sample, draw/edit a custom layout, import a version 1 JSON layout, or load a PNG/JPEG image as a tracing guide; simulation uses editable geometry, not the reference image
+- Structured layout files are JSON files up to 1 MB. They use the fixed 70 × 40 ft canvas and contain a `version: 1`, optional `name`, `region` rectangle or `null`, and an `items` array of up to 500 uniquely identified `seat`, `wall`, and `exit` objects. Coordinates and dimensions are in feet; imported items must fit the canvas.
+- A `seat` has `id`, `type`, `x`, `y`, `width`, and `height`; a `wall` has `id`, `type`, `x1`, `y1`, `x2`, and `y2`; an `exit` has `id`, `type`, `side`, `position`, `width`, and `label`. Exit position runs along its named room edge; exit labels must be unique.
+- Minimal layout example:
+  ```json
+  {
+    "version": 1,
+    "name": "Training Hall",
+    "region": { "x": 5, "y": 5, "width": 70, "height": 40 },
+    "items": [
+      { "id": 1, "type": "exit", "side": "east", "position": 25, "width": 6, "label": "Exit A" }
+    ]
+  }
+  ```
+- A PNG/JPEG tracing image up to 10 MB and 20 megapixels is fitted, aspect-preserving, as a faded background on the 70 × 40 ft canvas. Add editable walls, exits, obstacles, and a crowd region with the drawing tools; the image itself does not define dimensions or routes.
 - Layout content: walls, exits (including door widths), and obstacles such as rows of seats; dimensions and door widths are in feet
 - Crowd size (100 to 2,000 people) and initial placement, randomized within a user-selected region
 - User-configurable walking speed from 0.5 to 3.0 miles per hour (mph), default 2.7 mph
@@ -23,8 +37,8 @@ Provide a single-file browser app, implemented in the top-level `index.html`, to
 - During a run, elapsed time and evacuated/remaining crowd counts, updated live
 - A live plot with time in minutes on the horizontal axis and people remaining on the vertical axis
 - Total evacuation time and the times when 50% and 90% of the crowd have evacuated
-- CSV export of milestone times and the remaining-people time series
-- PNG capture of the currently displayed floor-plan frame
+- After completion, CSV export of 50%, 90%, and 100% milestone times and the remaining-people time series in simulated seconds and minutes
+- PNG capture of the currently displayed floor-plan frame, including people, queues, layout geometry, and any tracing image
 - If a layout is rejected, an explanation that the selected crowd region contains an area with no route to an exit
 
 ## Look and feel
@@ -36,7 +50,8 @@ Educational and approachable, using simple visual cues. Keep the floor plan as t
 - Validate the average-density speed adjustment, exit queue formation and service rate, multiple-exit assignment and switching at the 5-second / 10% rule, and rejection of a starting region with no route or excessive average density.
 - Validate the live remaining-people plot and 50%, 90%, and 100% milestone times at exit crossings; reset clears both.
 - Verify pause stops simulated time and playback speed changes wall-clock pacing without changing simulated walking speed or evacuation times.
-- Validate CSV/PNG exports.
+- Validate supported JSON/PNG/JPEG imports and clear errors for invalid files; verify tracing images remain reference-only and editable geometry is required for simulation.
+- Validate completed-run CSV milestone and time-series rows, PNG capture of the displayed floor-plan frame, and responsive/accessibility behavior for the import/export controls.
 
 ## Out of scope
 Stairs and elevation changes, built-in real-venue presets (users may draw their own venue layouts), and automated exit-layout optimization.
