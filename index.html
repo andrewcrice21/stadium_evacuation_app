@@ -329,6 +329,10 @@
       background: #087f75;
     }
 
+    .legend-swatch.emergency {
+      background: #b45309;
+    }
+
     .side-stack {
       display: grid;
       gap: 16px;
@@ -710,7 +714,13 @@
             <button class="tool-button" type="button" data-tool="region" aria-pressed="false">Set crowd region</button>
             <button class="tool-button" type="button" data-tool="wall" aria-pressed="false">Draw wall</button>
             <button class="tool-button" type="button" data-tool="seat" aria-pressed="false">Add seat block</button>
-            <button class="tool-button" type="button" data-tool="exit" aria-pressed="false">Place exit</button>
+            <button class="tool-button" type="button" data-tool="exit" aria-pressed="false">Place normal exit</button>
+            <button class="tool-button" type="button" data-tool="emergency-exit" aria-pressed="false">Place emergency exit</button>
+            <button class="tool-button" type="button" data-tool="stair" aria-pressed="false">Link stairs</button>
+          </div>
+          <div class="button-row" role="group" aria-label="Floor selection">
+            <button id="floor-one-button" type="button" aria-pressed="true">Ground floor</button>
+            <button id="floor-two-button" type="button" aria-pressed="false">Second floor</button>
           </div>
           <div class="editor-help">
             <span id="editor-instructions" role="status" aria-live="polite">Click an item to select it, then use Delete selected to remove it.</span>
@@ -739,6 +749,7 @@
               <g id="layout-items"></g>
               <g id="crowd-layer" pointer-events="none"></g>
               <g id="queue-layer" pointer-events="none"></g>
+              <g id="stair-layer" pointer-events="none"></g>
               <g id="drawing-preview" pointer-events="none"></g>
             </svg>
           </figure>
@@ -748,6 +759,7 @@
             <li class="legend-item"><span class="legend-swatch person" aria-hidden="true"></span>People</li>
             <li class="legend-item"><span class="legend-swatch seats" aria-hidden="true"></span>Seat blocks</li>
             <li class="legend-item"><span class="legend-swatch exit" aria-hidden="true"></span>Exit / queue</li>
+            <li class="legend-item"><span class="legend-swatch emergency" aria-hidden="true"></span>Emergency exit (manual activation)</li>
             <li class="legend-item"><span class="legend-swatch region" aria-hidden="true"></span>Starting region</li>
           </ul>
           <p class="hint">Routes use a 0.5-foot grid. Starting-area density sets walking speed; exit queues are flow-limited.</p>
@@ -774,13 +786,14 @@
               </div>
               <div class="button-row">
                 <button id="import-layout-button" type="button">Import layout JSON</button>
+                <button id="export-layout-button" type="button">Export layout JSON</button>
                 <button id="trace-image-button" type="button">Trace from image</button>
                 <button id="clear-reference-image-button" type="button" hidden>Remove reference image</button>
               </div>
               <input id="layout-file" type="file" accept=".json,application/json" hidden>
               <input id="reference-image-file" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" hidden>
               <p id="layout-import-status" class="setup-feedback" role="status" aria-live="polite"></p>
-              <p class="hint">JSON version 1, up to 1 MB. A valid import replaces the current layout; invalid files leave it unchanged.</p>
+              <p class="hint">JSON versions 1–2, up to 1 MB. Version 1 remains a single-floor layout. A valid import replaces the current layout; invalid files leave it unchanged.</p>
               <p class="hint">PNG/JPEG up to 10 MB and 20 MP. Loading an image starts a blank custom layout, replacing the current drawing; it is fitted to the 70 × 40 ft canvas for tracing.</p>
               <p id="reference-image-status" class="setup-feedback" role="status" aria-live="polite"></p>
             </div>
@@ -788,10 +801,16 @@
             <div class="control-group">
               <h3>Crowd setup</h3>
               <div class="field">
-                <label for="crowd-size">Crowd size (people)</label>
-                <input id="crowd-size" type="number" min="100" max="2000" step="1" value="500" aria-describedby="crowd-size-error">
+                <label for="crowd-size">Ground-floor crowd (people)</label>
+                <input id="crowd-size" type="number" min="0" max="2000" step="1" value="500" aria-describedby="crowd-size-error">
               </div>
               <p id="crowd-size-error" class="field-error" aria-live="polite"></p>
+              <div class="field">
+                <label for="second-floor-crowd-size">Second-floor crowd (people)</label>
+                <input id="second-floor-crowd-size" type="number" min="0" max="2000" step="1" value="0" aria-describedby="second-floor-crowd-size-error">
+              </div>
+              <p id="second-floor-crowd-size-error" class="field-error" aria-live="polite"></p>
+              <p id="combined-crowd-hint" class="hint">Combined population must be 100 to 2,000 people.</p>
               <p class="hint">People are randomly placed in walkable cells. The starting region must have a feasible average density.</p>
               <div class="field">
                 <label for="walking-speed">Walking speed (mph)</label>
@@ -800,10 +819,23 @@
               <p id="walking-speed-hint" class="hint">Choose the free-flow walking speed from 0.5 to 3.0 mph. Starting-area density may reduce it for the run.</p>
               <p id="walking-speed-error" class="field-error" aria-live="polite"></p>
               <div class="field">
-                <label for="exit-width">New exit width (feet)</label>
+                <label for="exit-width">New normal exit width (feet)</label>
                 <input id="exit-width" type="number" step="any" value="6">
               </div>
               <p id="exit-width-error" class="field-error" aria-live="polite"></p>
+              <div class="field">
+                <label for="emergency-exit-width">New emergency exit width (feet)</label>
+                <input id="emergency-exit-width" type="number" min="0.5" step="any" value="3">
+              </div>
+              <p id="emergency-exit-width-error" class="field-error" aria-live="polite"></p>
+              <div class="field">
+                <label for="stair-width">Stair clear width (feet)</label>
+                <input id="stair-width" type="number" min="1" max="20" step="any" value="4">
+              </div>
+              <div class="field">
+                <label for="stair-travel-time">Stair traversal time (seconds)</label>
+                <input id="stair-travel-time" type="number" min="1" max="600" step="any" value="10">
+              </div>
             </div>
 
             <div class="control-group">
@@ -813,6 +845,8 @@
                 <button id="pause-simulation" type="button" disabled>Pause</button>
                 <button id="reset-simulation" type="button" disabled>Reset</button>
               </div>
+              <button id="activate-emergency-exits" type="button" disabled>Activate emergency exits</button>
+              <p id="emergency-exit-status" class="hint" role="status" aria-live="polite">Emergency exits are inactive.</p>
               <p id="simulation-feedback" class="setup-feedback" role="status" aria-live="polite"></p>
               <div class="field" style="margin-top: 12px; margin-bottom: 0;">
                 <label for="playback-speed">Animation playback speed</label>
@@ -912,7 +946,7 @@
       </section>
     </main>
 
-    <p class="page-footnote">This simplified hydraulic model uses starting-area average density and exit-flow limits; it does not model changing local congestion or crowd interactions, and is for education, not engineering analysis. Imported images are tracing references only and do not define simulation geometry.</p>
+    <p class="page-footnote">This simplified hydraulic model uses starting-area average density and exit/stair flow limits; it does not model changing local congestion or crowd interactions, and is for education, not engineering analysis. Imported images are tracing references only and do not define simulation geometry.</p>
   </div>
   <script>
     (() => {
@@ -932,7 +966,7 @@
         { id: 10, type: "seat", x: 48, y: 32, width: 16, height: 1.5 },
         { id: 11, type: "seat", x: 48, y: 34.3, width: 16, height: 1.5 },
         { id: 12, type: "seat", x: 48, y: 36.6, width: 16, height: 1.5 },
-        { id: 13, type: "exit", side: "east", position: 25, width: 6, label: "Exit A" }
+        { id: 13, type: "exit", kind: "normal", side: "east", position: 25, width: 6, label: "Exit A" }
       ];
 
       const svgNamespace = "http://www.w3.org/2000/svg";
@@ -942,6 +976,7 @@
       const mapDescription = document.getElementById("map-desc");
       const itemLayer = document.getElementById("layout-items");
       const regionLayer = document.getElementById("region-layer");
+      const stairLayer = document.getElementById("stair-layer");
       const referenceImageLayer = document.getElementById("reference-image-layer");
       const crowdLayer = document.getElementById("crowd-layer");
       const queueLayer = document.getElementById("queue-layer");
@@ -954,10 +989,19 @@
       const roomCaption = document.getElementById("room-caption");
       const countInput = document.getElementById("crowd-size");
       const countError = document.getElementById("crowd-size-error");
+      const secondCountInput = document.getElementById("second-floor-crowd-size");
+      const secondCountError = document.getElementById("second-floor-crowd-size-error");
+      const combinedCrowdHint = document.getElementById("combined-crowd-hint");
       const speedInput = document.getElementById("walking-speed");
       const speedError = document.getElementById("walking-speed-error");
       const doorWidthInput = document.getElementById("exit-width");
       const doorWidthError = document.getElementById("exit-width-error");
+      const emergencyExitWidthInput = document.getElementById("emergency-exit-width");
+      const emergencyExitWidthError = document.getElementById("emergency-exit-width-error");
+      const stairWidthInput = document.getElementById("stair-width");
+      const stairTravelTimeInput = document.getElementById("stair-travel-time");
+      const floorOneButton = document.getElementById("floor-one-button");
+      const floorTwoButton = document.getElementById("floor-two-button");
       const crowdTotal = document.getElementById("status-crowd-total");
       const layoutSelect = document.getElementById("sample-layout");
       const layoutTitle = document.getElementById("floorplan-title");
@@ -966,6 +1010,8 @@
       const startButton = document.getElementById("start-simulation");
       const pauseButton = document.getElementById("pause-simulation");
       const resetButton = document.getElementById("reset-simulation");
+      const activateEmergencyExitsButton = document.getElementById("activate-emergency-exits");
+      const emergencyExitStatus = document.getElementById("emergency-exit-status");
       const simulationFeedback = document.getElementById("simulation-feedback");
       const elapsedTime = document.getElementById("elapsed-time");
       const evacuatedCount = document.getElementById("evacuated-count");
@@ -983,6 +1029,7 @@
       const milestone90 = document.getElementById("milestone-90");
       const milestone100 = document.getElementById("milestone-100");
       const importLayoutButton = document.getElementById("import-layout-button");
+      const exportLayoutButton = document.getElementById("export-layout-button");
       const traceImageButton = document.getElementById("trace-image-button");
       const clearReferenceImageButton = document.getElementById("clear-reference-image-button");
       const layoutFileInput = document.getElementById("layout-file");
@@ -993,9 +1040,20 @@
       const capturePngButton = document.getElementById("capture-png-button");
       const exportStatus = document.getElementById("export-status");
 
-      let items = sampleItems.map(item => ({ ...item }));
-      let region = { ...room };
+      let floors = [
+        { id: 1, name: "Ground floor", items: sampleItems.map(item => ({ ...item })), region: { ...room }, crowdCount: 500 },
+        { id: 2, name: "Second floor", items: [], region: null, crowdCount: 0 }
+      ];
+      let activeFloorIndex = 0;
+      let items = floors[activeFloorIndex].items;
+      let region = floors[activeFloorIndex].region;
+      let stairs = [];
+      let pendingStairEnd = null;
+      let nextStairId = 1;
+      let selectedStairId = null;
+      let emergencyExitsActive = false;
       let referenceImageDataUrl = null;
+      let floorReferenceImages = [null, null];
       let selectedItemId = null;
       let currentTool = "select";
       let drawing = null;
@@ -1013,9 +1071,13 @@
       let simulationState = "ready";
       let walkableGrid = null;
       let routeFields = [];
+      let exitRouteFields = [];
+      let floorRuntimes = [];
       let initialAgents = [];
       let agents = [];
       let exitQueues = new Map();
+      let stairQueues = new Map();
+      let stairTravelers = [];
       let elapsedSeconds = 0;
       let evacuatedSoFar = 0;
       let plotTotalPeople = 0;
@@ -1048,76 +1110,124 @@
         mapDescription.textContent = description;
       }
 
+      function syncActiveFloor() {
+        floors[activeFloorIndex].items = items;
+        floors[activeFloorIndex].region = region;
+      }
+
+      function renderStairs() {
+        stairLayer.replaceChildren();
+        for (const stair of stairs) {
+          const end = stair.ends.find(point => point.floorId === floors[activeFloorIndex].id);
+          if (!end) continue;
+          const group = svgElement("g", {
+            "data-stair-id": stair.id,
+            role: "button",
+            tabindex: "0",
+            "aria-label": `Stair link ${stair.id}, ${numberLabel(stair.width)} feet wide, ${numberLabel(stair.travelTime)} seconds travel time`
+          });
+          group.append(
+            svgElement("circle", {
+              cx: end.x,
+              cy: end.y,
+              r: 0.65,
+              fill: "#7551a5",
+              stroke: selectedStairId === stair.id ? "#b66b00" : "#ffffff",
+              "stroke-width": 0.18
+            }),
+            svgElement("text", {
+              x: end.x + 0.8,
+              y: end.y - 0.4,
+              fill: "#563783",
+              "font-family": "system-ui, sans-serif",
+              "font-size": 1.05,
+              "font-weight": 800
+            }, `S${stair.id}`)
+          );
+          stairLayer.append(group);
+        }
+        if (pendingStairEnd && pendingStairEnd.floorId === floors[activeFloorIndex].id) {
+          stairLayer.append(svgElement("circle", {
+            cx: pendingStairEnd.x,
+            cy: pendingStairEnd.y,
+            r: 0.45,
+            fill: "none",
+            stroke: "#7551a5",
+            "stroke-width": 0.18,
+            "stroke-dasharray": "0.2 0.15",
+            "aria-label": "Unpaired stair endpoint"
+          }));
+        }
+      }
+
+      function setActiveFloor(floorIndex) {
+        if (![0, 1].includes(floorIndex) || floorIndex === activeFloorIndex) return;
+        syncActiveFloor();
+        activeFloorIndex = floorIndex;
+        items = floors[floorIndex].items;
+        region = floors[floorIndex].region;
+        renderActiveReferenceImage();
+        if (floorRuntimes[floorIndex]) walkableGrid = floorRuntimes[floorIndex].grid;
+        selectedItemId = null;
+        selectedStairId = null;
+        floorOneButton.setAttribute("aria-pressed", String(floorIndex === 0));
+        floorTwoButton.setAttribute("aria-pressed", String(floorIndex === 1));
+        layoutTitle.textContent = floors[floorIndex].name;
+        roomCaption.textContent = `${floors[floorIndex].name.toUpperCase()} · 70 × 40 FT`;
+        layoutDescription.textContent = `${floors[floorIndex].name} layout · dimensions in feet`;
+        updateMapAccessibility(
+          `Editable ${floors[floorIndex].name} floor plan`,
+          `A 70 by 40 foot ${floors[floorIndex].name.toLowerCase()} with editable walls, exits, obstacles, stairs, and a starting region.`
+        );
+        renderItems();
+        renderRegion();
+        renderStairs();
+        renderActiveFloorCrowd();
+        renderQueueIndicators();
+      }
+
       function isNumberWithin(value, minimum, maximum) {
         return Number.isFinite(value) && value >= minimum && value <= maximum;
       }
 
-      function validateLayoutData(data) {
-        if (!data || typeof data !== "object" || Array.isArray(data)) {
-          throw new Error("The JSON root must be an object.");
+      function validateRegion(value, label) {
+        if (value === null) return null;
+        if (!value || typeof value !== "object" || Array.isArray(value)
+          || ![value.x, value.y, value.width, value.height].every(Number.isFinite)
+          || value.width <= 0 || value.height <= 0
+          || value.x < room.x || value.y < room.y
+          || value.x + value.width > room.x + room.width
+          || value.y + value.height > room.y + room.height) {
+          throw new Error(`${label} must be null or a positive-size rectangle inside the 70 × 40 ft canvas.`);
         }
-        if (data.version !== 1) {
-          throw new Error("Unsupported layout version. Expected version 1.");
-        }
-        if (data.name !== undefined && (typeof data.name !== "string" || data.name.length > 80)) {
-          throw new Error("The optional layout name must be a string of 80 characters or fewer.");
-        }
-        if (!Array.isArray(data.items) || data.items.length > 500) {
-          throw new Error("The layout must contain an items array with no more than 500 items.");
-        }
-        if (!Object.prototype.hasOwnProperty.call(data, "region")) {
-          throw new Error("The layout must include a region object or null.");
-        }
+        return { x: value.x, y: value.y, width: value.width, height: value.height };
+      }
 
-        let importedRegion = null;
-        if (data.region !== null) {
-          const value = data.region;
-          if (!value || typeof value !== "object" || Array.isArray(value)
-            || ![value.x, value.y, value.width, value.height].every(Number.isFinite)
-            || value.width <= 0 || value.height <= 0
-            || value.x < room.x || value.y < room.y
-            || value.x + value.width > room.x + room.width
-            || value.y + value.height > room.y + room.height) {
-            throw new Error("The region must be null or a positive-size rectangle inside the 70 × 40 ft canvas.");
-          }
-          importedRegion = {
-            x: value.x,
-            y: value.y,
-            width: value.width,
-            height: value.height
-          };
+      function validateLayoutItems(data, floorLabel) {
+        if (!Array.isArray(data) || data.length > 500) {
+          throw new Error(`${floorLabel} must contain no more than 500 layout items.`);
         }
-
         const ids = new Set();
         const exitLabels = new Set();
-        const importedItems = data.items.map((item, index) => {
+        return data.map((item, index) => {
           const itemNumber = index + 1;
           if (!item || typeof item !== "object" || Array.isArray(item)) {
-            throw new Error(`Item ${itemNumber} must be an object.`);
+            throw new Error(`${floorLabel} item ${itemNumber} must be an object.`);
           }
           if (!Number.isSafeInteger(item.id) || item.id < 1 || ids.has(item.id)) {
-            throw new Error(`Item ${itemNumber} must have a unique positive integer id.`);
+            throw new Error(`${floorLabel} item ${itemNumber} must have a unique positive integer id.`);
           }
           ids.add(item.id);
-
           if (item.type === "seat") {
             if (![item.x, item.y, item.width, item.height].every(Number.isFinite)
               || item.width <= 0 || item.height <= 0
               || item.x < room.x || item.y < room.y
               || item.x + item.width > room.x + room.width
               || item.y + item.height > room.y + room.height) {
-              throw new Error(`Seat item ${itemNumber} must be a positive-size rectangle inside the 70 × 40 ft canvas.`);
+              throw new Error(`${floorLabel} seat ${itemNumber} must fit inside the 70 × 40 ft canvas.`);
             }
-            return {
-              id: item.id,
-              type: "seat",
-              x: item.x,
-              y: item.y,
-              width: item.width,
-              height: item.height
-            };
+            return { id: item.id, type: "seat", x: item.x, y: item.y, width: item.width, height: item.height };
           }
-
           if (item.type === "wall") {
             if (![item.x1, item.y1, item.x2, item.y2].every(Number.isFinite)
               || !isNumberWithin(item.x1, room.x, room.x + room.width)
@@ -1125,58 +1235,122 @@
               || !isNumberWithin(item.y1, room.y, room.y + room.height)
               || !isNumberWithin(item.y2, room.y, room.y + room.height)
               || Math.hypot(item.x2 - item.x1, item.y2 - item.y1) < 0.5) {
-              throw new Error(`Wall item ${itemNumber} must be at least 0.5 ft long and inside the 70 × 40 ft canvas.`);
+              throw new Error(`${floorLabel} wall ${itemNumber} must be at least 0.5 ft long and inside the canvas.`);
             }
-            return {
-              id: item.id,
-              type: "wall",
-              x1: item.x1,
-              y1: item.y1,
-              x2: item.x2,
-              y2: item.y2
-            };
+            return { id: item.id, type: "wall", x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2 };
           }
-
           if (item.type === "exit") {
             const horizontal = item.side === "north" || item.side === "south";
             if (!["north", "east", "south", "west"].includes(item.side)
-              || !Number.isFinite(item.position)
-              || !Number.isFinite(item.width)
-              || item.width <= 0
-              || typeof item.label !== "string"
-              || item.label.trim() === ""
-              || item.label.length > 32) {
-              throw new Error(`Exit item ${itemNumber} must have a side, position, positive width, and label.`);
+              || !Number.isFinite(item.position) || !Number.isFinite(item.width) || item.width <= 0
+              || !["normal", "emergency", undefined].includes(item.kind)
+              || typeof item.label !== "string" || item.label.trim() === "" || item.label.length > 32) {
+              throw new Error(`${floorLabel} exit ${itemNumber} must have a valid kind, side, position, positive width, and label.`);
             }
             const minimum = horizontal ? room.x : room.y;
             const maximum = horizontal ? room.x + room.width : room.y + room.height;
-            if (item.position - item.width / 2 < minimum
-              || item.position + item.width / 2 > maximum) {
-              throw new Error(`Exit item ${itemNumber} must fit along its selected room edge.`);
+            if (item.position - item.width / 2 < minimum || item.position + item.width / 2 > maximum) {
+              throw new Error(`${floorLabel} exit ${itemNumber} must fit along its selected room edge.`);
             }
             const normalizedLabel = item.label.trim().toLowerCase();
-            if (exitLabels.has(normalizedLabel)) {
-              throw new Error(`Exit label "${item.label}" is used more than once.`);
-            }
+            if (exitLabels.has(normalizedLabel)) throw new Error(`Exit label "${item.label}" is used more than once on ${floorLabel}.`);
             exitLabels.add(normalizedLabel);
             return {
               id: item.id,
               type: "exit",
+              kind: item.kind || "normal",
               side: item.side,
               position: item.position,
               width: item.width,
               label: item.label.trim()
             };
           }
-
-          throw new Error(`Item ${itemNumber} has an unsupported type. Use seat, wall, or exit.`);
+          throw new Error(`${floorLabel} item ${itemNumber} has an unsupported type. Use seat, wall, or exit.`);
         });
+      }
 
-        return {
-          name: (data.name || "Imported layout").trim() || "Imported layout",
-          items: importedItems,
-          region: importedRegion
-        };
+      function validateLayoutData(data) {
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+          throw new Error("The JSON root must be an object.");
+        }
+        if (![1, 2].includes(data.version)) {
+          throw new Error("Unsupported layout version. Expected version 1 or 2.");
+        }
+        if (data.name !== undefined && (typeof data.name !== "string" || data.name.length > 80)) {
+          throw new Error("The optional layout name must be a string of 80 characters or fewer.");
+        }
+        const name = (data.name || "Imported layout").trim() || "Imported layout";
+        if (data.version === 1) {
+          if (!Object.prototype.hasOwnProperty.call(data, "region")) {
+            throw new Error("A version 1 layout must include a region object or null.");
+          }
+          return {
+            version: 1,
+            name,
+            floors: [
+              { id: 1, name: "Ground floor", crowdCount: 500, region: validateRegion(data.region, "Region"), items: validateLayoutItems(data.items, "Ground floor") },
+              { id: 2, name: "Second floor", crowdCount: 0, region: null, items: [] }
+            ],
+            stairs: []
+          };
+        }
+
+        if (!Array.isArray(data.floors) || data.floors.length !== 2) {
+          throw new Error("A version 2 layout must contain exactly two floors.");
+        }
+        const floors = data.floors.map((floor, index) => {
+          const floorNumber = index + 1;
+          if (!floor || typeof floor !== "object" || floor.id !== floorNumber) {
+            throw new Error(`Floor ${floorNumber} must have id ${floorNumber}.`);
+          }
+          if (!Number.isInteger(floor.crowdCount) || floor.crowdCount < 0 || floor.crowdCount > 2000) {
+            throw new Error(`Floor ${floorNumber} crowdCount must be a whole number from 0 to 2,000.`);
+          }
+          if (!Object.prototype.hasOwnProperty.call(floor, "region")) {
+            throw new Error(`Floor ${floorNumber} must include a region object or null.`);
+          }
+          return {
+            id: floor.id,
+            name: floorNumber === 1 ? "Ground floor" : "Second floor",
+            crowdCount: floor.crowdCount,
+            region: validateRegion(floor.region, `Floor ${floorNumber} region`),
+            items: validateLayoutItems(floor.items, `Floor ${floorNumber}`)
+          };
+        });
+        if (floors.reduce((sum, floor) => sum + floor.items.length, 0) > 500) {
+          throw new Error("A version 2 layout must contain no more than 500 items across both floors.");
+        }
+        const total = floors.reduce((sum, floor) => sum + floor.crowdCount, 0);
+        if (total < 100 || total > 2000) {
+          throw new Error("Combined floor population must be from 100 to 2,000 people.");
+        }
+        if (!Array.isArray(data.stairs) || data.stairs.length > 50) {
+          throw new Error("A version 2 layout must contain a stairs array with no more than 50 links.");
+        }
+        const stairIds = new Set();
+        const stairs = data.stairs.map((stair, index) => {
+          if (!stair || !Number.isSafeInteger(stair.id) || stair.id < 1 || stairIds.has(stair.id)
+            || !Number.isFinite(stair.width) || stair.width < 1 || stair.width > 20
+            || !Number.isFinite(stair.travelTime) || stair.travelTime < 1 || stair.travelTime > 600
+            || !Array.isArray(stair.ends) || stair.ends.length !== 2) {
+            throw new Error(`Stair link ${index + 1} must have a unique id, valid width/time, and two endpoints.`);
+          }
+          stairIds.add(stair.id);
+          const ends = stair.ends.map(end => {
+            if (!end || ![1, 2].includes(end.floorId)
+              || !Number.isFinite(end.x) || !Number.isFinite(end.y)
+              || !isNumberWithin(end.x, room.x, room.x + room.width)
+              || !isNumberWithin(end.y, room.y, room.y + room.height)) {
+              throw new Error(`Stair link ${stair.id} has an endpoint outside a floor canvas.`);
+            }
+            return { floorId: end.floorId, x: end.x, y: end.y };
+          });
+          if (ends[0].floorId === ends[1].floorId) {
+            throw new Error(`Stair link ${stair.id} must connect different floors.`);
+          }
+          return { id: stair.id, width: stair.width, travelTime: stair.travelTime, ends };
+        });
+        return { version: 2, name, floors, stairs };
       }
 
       function readFileAsDataUrl(file) {
@@ -1242,23 +1416,50 @@
         if (milestones.some(([, time]) => time === null)) {
           throw new Error("All evacuation milestones must be recorded before exporting results.");
         }
-
         const rows = [
-          ["record_type", "simulated_time_seconds", "simulated_time_minutes", "people_remaining", "milestone"]
+          ["record_type", "floor", "simulated_time_seconds", "simulated_time_minutes", "people_remaining", "people_total", "milestone"]
         ];
+        for (const floor of floors) {
+          rows.push(["floor_population", floor.name, "", "", "", floor.crowdCount, ""]);
+        }
         for (const [label, time] of milestones) {
-          rows.push(["milestone", time.toFixed(3), (time / 60).toFixed(3), "", label]);
+          rows.push(["milestone", "All floors", time.toFixed(3), (time / 60).toFixed(3), "", plotTotalPeople, label]);
         }
         for (const sample of plotSamples) {
           rows.push([
             "sample",
+            "All floors",
             sample.time.toFixed(3),
             (sample.time / 60).toFixed(3),
             sample.remaining,
+            plotTotalPeople,
             ""
           ]);
         }
         return `\uFEFF${rows.map(row => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+      }
+
+      function createLayoutJson() {
+        syncActiveFloor();
+        if (!validateCrowdCount()) {
+          throw new Error("Correct the per-floor crowd counts before exporting the layout.");
+        }
+        return JSON.stringify({
+          version: 2,
+          name: layoutTitle.textContent.slice(0, 80),
+          floors: floors.map(floor => ({
+            id: floor.id,
+            crowdCount: floor.crowdCount,
+            region: floor.region ? { ...floor.region } : null,
+            items: floor.items.map(item => ({ ...item }))
+          })),
+          stairs: stairs.map(stair => ({
+            id: stair.id,
+            width: stair.width,
+            travelTime: stair.travelTime,
+            ends: stair.ends.map(end => ({ ...end }))
+          }))
+        }, null, 2);
       }
 
       function updateMilestoneDisplay() {
@@ -1388,6 +1589,7 @@
 
       function clearReferenceImage() {
         referenceImageDataUrl = null;
+        floorReferenceImages[activeFloorIndex] = null;
         referenceImageLayer.replaceChildren();
         clearReferenceImageButton.hidden = true;
         referenceImageStatus.textContent = "";
@@ -1395,25 +1597,60 @@
         layoutImportStatus.classList.remove("is-invalid");
       }
 
+      function renderActiveReferenceImage() {
+        const reference = floorReferenceImages[activeFloorIndex];
+        referenceImageDataUrl = reference ? reference.dataUrl : null;
+        referenceImageLayer.replaceChildren();
+        clearReferenceImageButton.hidden = !reference;
+        referenceImageStatus.textContent = reference ? `${reference.filename} is shown as a tracing guide on ${floors[activeFloorIndex].name}.` : "";
+        if (reference) {
+          referenceImageLayer.append(svgElement("image", {
+            x: room.x,
+            y: room.y,
+            width: room.width,
+            height: room.height,
+            preserveAspectRatio: "xMidYMid meet",
+            opacity: 0.34,
+            href: reference.dataUrl,
+            role: "img",
+            "aria-label": `Tracing reference image: ${reference.filename}`
+          }));
+        }
+      }
+
       function applyImportedLayout(layout) {
-        items = layout.items;
-        region = layout.region;
+        floors = layout.floors;
+        stairs = layout.stairs;
+        floorReferenceImages = [null, null];
+        activeFloorIndex = 0;
+        items = floors[0].items;
+        region = floors[0].region;
+        countInput.value = String(floors[0].crowdCount);
+        secondCountInput.value = String(floors[1].crowdCount);
         selectedItemId = null;
+        selectedStairId = null;
+        pendingStairEnd = null;
         nextItemId = Math.max(0, ...items.map(item => item.id)) + 1;
         nextExitNumber = 1;
+        nextStairId = Math.max(0, ...stairs.map(stair => stair.id)) + 1;
         layoutSelect.value = "custom";
         layoutTitle.textContent = layout.name;
-        layoutDescription.textContent = "Imported JSON layout · 70 × 40 ft canvas";
+        layoutDescription.textContent = layout.version === 1
+          ? "Imported version 1 single-floor JSON layout · 70 × 40 ft canvas"
+          : "Imported version 2 two-floor JSON layout · 70 × 40 ft canvas";
         roomCaption.textContent = `${layout.name.slice(0, 36).toUpperCase()} · 70 × 40 FT`;
+        floorOneButton.setAttribute("aria-pressed", "true");
+        floorTwoButton.setAttribute("aria-pressed", "false");
         updateMapAccessibility(
           `Editable ${layout.name} floor plan`,
-          "An imported 70 by 40 foot layout with editable walls, exits, obstacles, and a starting region."
+          "An imported two-floor layout with editable walls, exits, obstacles, stairs, and floor-specific starting regions."
         );
         scenarioBadge.textContent = `${layout.name} · imported`;
         clearReferenceImage();
         validateCrowdCount();
         renderItems();
         renderRegion();
+        renderStairs();
         setTool("select");
         refreshSimulationSetup();
         layoutImportStatus.textContent = `Imported "${layout.name}". Review the layout and correct any setup issues before starting.`;
@@ -1422,6 +1659,7 @@
       function applyTracingImage(dataUrl, filename) {
         items = [];
         region = null;
+        syncActiveFloor();
         selectedItemId = null;
         nextItemId = 1;
         nextExitNumber = 1;
@@ -1435,23 +1673,14 @@
         );
         scenarioBadge.textContent = "Image loaded · trace layout geometry";
         referenceImageDataUrl = dataUrl;
-        referenceImageLayer.replaceChildren(svgElement("image", {
-          x: room.x,
-          y: room.y,
-          width: room.width,
-          height: room.height,
-          preserveAspectRatio: "xMidYMid meet",
-          opacity: 0.34,
-          href: referenceImageDataUrl,
-          role: "img",
-          "aria-label": `Tracing reference image: ${filename}`
-        }));
-        clearReferenceImageButton.hidden = false;
+        floorReferenceImages[activeFloorIndex] = { dataUrl, filename };
+        renderActiveReferenceImage();
         referenceImageStatus.textContent = `${filename} is shown as a tracing guide. Add the venue walls, exits, obstacles, and crowd region with the editing tools.`;
         layoutImportStatus.textContent = "";
         validateCrowdCount();
         renderItems();
         renderRegion();
+        renderStairs();
         setTool("select");
         refreshSimulationSetup();
       }
@@ -1503,7 +1732,7 @@
           "data-item-id": item.id,
           role: "button",
           tabindex: "0",
-          "aria-label": `${item.label}, ${numberLabel(item.width)} feet wide`
+          "aria-label": `${item.kind === "emergency" ? "Emergency exit" : "Normal exit"} ${item.label}, ${numberLabel(item.width)} feet wide`
         });
         let x;
         let y;
@@ -1537,14 +1766,14 @@
             width,
             height,
             rx: 0.2,
-            fill: "#087f75",
+            fill: item.kind === "emergency" ? "#b45309" : "#087f75",
             stroke: "#ffffff",
             "stroke-width": 0.14
           }),
           svgElement("text", {
             x: labelX,
             y: labelY,
-            fill: "#155e53",
+            fill: item.kind === "emergency" ? "#92400e" : "#155e53",
             "font-family": "system-ui, sans-serif",
             "font-size": 1.2,
             "font-weight": 800,
@@ -1597,7 +1826,7 @@
           }
           itemLayer.append(shape);
         }
-        deleteButton.disabled = selectedItemId === null;
+        deleteButton.disabled = selectedItemId === null && selectedStairId === null;
       }
 
       function renderRegion() {
@@ -1696,10 +1925,11 @@
       }
 
       function markCustomLayout() {
+        syncActiveFloor();
         layoutSelect.value = "custom";
         layoutTitle.textContent = "Custom layout";
-        layoutDescription.textContent = "Custom floor plan · 70 × 40 ft canvas";
-        roomCaption.textContent = "CUSTOM FLOOR PLAN · 70 × 40 FT";
+        layoutDescription.textContent = `${floors[activeFloorIndex].name} custom floor plan · 70 × 40 ft canvas`;
+        roomCaption.textContent = `${floors[activeFloorIndex].name.toUpperCase()} · 70 × 40 FT`;
         updateMapAccessibility(
           "Editable custom floor plan",
           "A 70 by 40 foot room with editable walls, exits, obstacles, and a starting region."
@@ -1707,17 +1937,19 @@
         scenarioBadge.textContent = "Custom layout · not running";
       }
 
-      function addExit(point) {
-        const width = Number(doorWidthInput.value);
+      function addExit(point, kind = "normal") {
+        const widthInput = kind === "emergency" ? emergencyExitWidthInput : doorWidthInput;
+        const widthError = kind === "emergency" ? emergencyExitWidthError : doorWidthError;
+        const width = Number(widthInput.value);
         if (!Number.isFinite(width) || width <= 0 || width > Math.min(room.width, room.height)) {
-          doorWidthError.textContent = "Enter a door width greater than 0 and no larger than the room.";
-          doorWidthInput.setAttribute("aria-invalid", "true");
-          doorWidthInput.focus();
+          widthError.textContent = "Enter a door width greater than 0 and no larger than the room.";
+          widthInput.setAttribute("aria-invalid", "true");
+          widthInput.focus();
           return;
         }
 
-        doorWidthError.textContent = "";
-        doorWidthInput.removeAttribute("aria-invalid");
+        widthError.textContent = "";
+        widthInput.removeAttribute("aria-invalid");
         const distances = [
           { side: "west", distance: Math.abs(point.x - room.x), position: point.y },
           { side: "east", distance: Math.abs(point.x - room.x - room.width), position: point.y },
@@ -1731,14 +1963,13 @@
         const position = snap(clamp(closest.position, start + width / 2, start + length - width / 2));
         let label;
         do {
-          label = nextExitNumber <= 26
-            ? `Exit ${String.fromCharCode(64 + nextExitNumber)}`
-            : `Exit ${nextExitNumber}`;
+          label = `${kind === "emergency" ? "Emergency " : ""}Exit ${nextExitNumber}`;
           nextExitNumber += 1;
         } while (items.some(item => item.type === "exit" && item.label.toLowerCase() === label.toLowerCase()));
         const item = {
           id: nextItemId++,
           type: "exit",
+          kind,
           side: closest.side,
           position,
           width,
@@ -1753,18 +1984,24 @@
       }
 
       function validateCrowdCount() {
-        const value = Number(countInput.value);
-        let message = "";
-        if (countInput.value.trim() === "" || !Number.isInteger(value)) {
-          message = "Enter a whole number of people.";
-        } else if (value < 100 || value > 2000) {
-          message = "Crowd size must be from 100 to 2,000 people.";
-        }
-
-        countInput.setAttribute("aria-invalid", message ? "true" : "false");
-        countError.textContent = message;
-        crowdTotal.textContent = message ? "—" : String(value);
-        return !message;
+        const values = [countInput.value, secondCountInput.value].map(value =>
+          value.trim() === "" ? NaN : Number(value));
+        const errors = values.map(value => !Number.isInteger(value) || value < 0 || value > 2000
+          ? "Enter a whole number from 0 to 2,000."
+          : "");
+        const total = values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
+        const totalValid = errors.every(error => !error) && total >= 100 && total <= 2000;
+        countError.textContent = errors[0];
+        secondCountError.textContent = errors[1];
+        countInput.setAttribute("aria-invalid", String(Boolean(errors[0]) || !totalValid));
+        secondCountInput.setAttribute("aria-invalid", String(Boolean(errors[1]) || !totalValid));
+        combinedCrowdHint.textContent = totalValid
+          ? `Combined population: ${total} people.`
+          : "Combined population must be 100 to 2,000 people.";
+        crowdTotal.textContent = totalValid ? String(total) : "—";
+        floors[0].crowdCount = values[0];
+        floors[1].crowdCount = values[1];
+        return totalValid;
       }
 
       function validateWalkingSpeed() {
@@ -1802,8 +2039,8 @@
         return Math.hypot(point.x - (start.x + projection * dx), point.y - (start.y + projection * dy));
       }
 
-      function isWalkable(point) {
-        for (const item of items) {
+      function isWalkable(point, floorItems = items) {
+        for (const item of floorItems) {
           if (item.type === "seat"
             && point.x >= item.x && point.x <= item.x + item.width
             && point.y >= item.y && point.y <= item.y + item.height) {
@@ -1823,7 +2060,7 @@
         return true;
       }
 
-      function buildWalkableGrid() {
+      function buildWalkableGrid(floorItems = items) {
         const columns = Math.round(room.width / gridStep);
         const rows = Math.round(room.height / gridStep);
         const size = columns * rows;
@@ -1831,7 +2068,7 @@
 
         for (let index = 0; index < size; index += 1) {
           const point = cellCenter(index, columns);
-          if (!isWalkable(point)) {
+          if (!isWalkable(point, floorItems)) {
             continue;
           }
           walkable[index] = 1;
@@ -1840,29 +2077,24 @@
         return { columns, rows, size, walkable };
       }
 
-      function regionCellsIn(grid) {
+      function regionCellsIn(grid, floorRegion = region) {
         const cells = [];
+        if (!floorRegion) return cells;
         for (let index = 0; index < grid.size; index += 1) {
           if (!grid.walkable[index]) {
             continue;
           }
           const point = cellCenter(index, grid.columns);
-          if (point.x >= region.x && point.x <= region.x + region.width
-            && point.y >= region.y && point.y <= region.y + region.height) {
+          if (point.x >= floorRegion.x && point.x <= floorRegion.x + floorRegion.width
+            && point.y >= floorRegion.y && point.y <= floorRegion.y + floorRegion.height) {
             cells.push(index);
           }
         }
         return cells;
       }
 
-      function findRouteField(exit, grid) {
+      function findRouteField(exit, grid, floorIndex = activeFloorIndex) {
         const { columns, rows, size, walkable } = grid;
-        const distance = new Int32Array(size);
-        const nextTowardExit = new Int32Array(size);
-        const queue = new Uint32Array(size);
-        distance.fill(-1);
-        nextTowardExit.fill(-1);
-
         const start = exit.position - exit.width / 2;
         const end = exit.position + exit.width / 2;
         const exitCells = [];
@@ -1894,9 +2126,37 @@
           };
         }
 
+        return buildRouteField(exitCells, grid, {
+          exit,
+          floorIndex,
+          exitFloorIndex: floorIndex,
+          queueId: `${floorIndex}:${exit.id}`
+        });
+      }
+
+      function findRouteFieldToPoint(point, grid, floorIndex, stairId) {
+        const index = cellIndexAt(point, grid);
+        if (!grid.walkable[index]) {
+          return { error: `Stair link ${stairId} endpoint is blocked by a wall or seat.` };
+        }
+        return buildRouteField([index], grid, {
+          floorIndex,
+          target: point,
+          stairId,
+          stairQueueId: stairId
+        });
+      }
+
+      function buildRouteField(targetCells, grid, metadata) {
+        const { columns, size, walkable } = grid;
+        const distance = new Int32Array(size);
+        const nextTowardExit = new Int32Array(size);
+        const queue = new Uint32Array(size);
+        distance.fill(-1);
+        nextTowardExit.fill(-1);
         let queueHead = 0;
         let queueTail = 0;
-        for (const index of exitCells) {
+        for (const index of targetCells) {
           distance[index] = 0;
           queue[queueTail++] = index;
         }
@@ -1920,7 +2180,7 @@
           }
         }
 
-        return { columns, distance, nextTowardExit, exit };
+        return { columns, distance, nextTowardExit, ...metadata };
       }
 
       function buildAgentPath(startIndex, route, startPoint) {
@@ -1957,7 +2217,7 @@
           "stroke-width": 0.06,
           "aria-hidden": "true"
         });
-        crowdLayer.append(element);
+        if (data.floorIndex === activeFloorIndex) crowdLayer.append(element);
         return {
           x: data.x,
           y: data.y,
@@ -1965,30 +2225,49 @@
           targetIndex: 0,
           walkingSpeed: data.walkingSpeed,
           exitId: data.exitId,
+          queueId: data.queueId,
+          floorIndex: data.floorIndex,
+          route: data.route,
+          hasPassedStair: false,
+          inStair: false,
+          queuedAtStair: false,
           queued: false,
           element,
           evacuated: false
         };
       }
 
-      function cellIndexAt(point) {
-        const column = clamp(Math.floor((point.x - room.x) / gridStep), 0, walkableGrid.columns - 1);
-        const row = clamp(Math.floor((point.y - room.y) / gridStep), 0, walkableGrid.rows - 1);
-        return row * walkableGrid.columns + column;
+      function cellIndexAt(point, grid = walkableGrid) {
+        const column = clamp(Math.floor((point.x - room.x) / gridStep), 0, grid.columns - 1);
+        const row = clamp(Math.floor((point.y - room.y) / gridStep), 0, grid.rows - 1);
+        return row * grid.columns + column;
       }
 
-      function estimatedExitTime(point, walkingSpeed, route, assignedCount) {
-        const index = cellIndexAt(point);
+      function estimatedExitTime(point, walkingSpeed, route, assignedCount, grid = walkableGrid, stairAssignedCount = 0) {
+        const index = cellIndexAt(point, grid);
         const steps = route.distance[index];
         if (steps < 0) {
           return Infinity;
         }
         const center = cellCenter(index, route.columns);
-        const distance = steps * gridStep + Math.hypot(point.x - center.x, point.y - center.y);
+        let distance = steps * gridStep + Math.hypot(point.x - center.x, point.y - center.y);
+        let stairSeconds = 0;
+        if (route.stairId) {
+          const destinationGrid = floorRuntimes[route.exitFloorIndex].grid;
+          const destinationIndex = cellIndexAt(route.destinationEnd, destinationGrid);
+          const exitSteps = route.exitRoute.distance[destinationIndex];
+          if (exitSteps < 0) return Infinity;
+          const destinationCenter = cellCenter(destinationIndex, destinationGrid.columns);
+          distance += exitSteps * gridStep
+            + Math.hypot(route.destinationEnd.x - destinationCenter.x, route.destinationEnd.y - destinationCenter.y);
+          stairSeconds = route.stair.travelTime
+            + stairAssignedCount * 60 / (maximumSpecificFlow * route.stair.width);
+        }
         const walkingSeconds = distance / (walkingSpeed / 60);
         const serviceRate = maximumSpecificFlow * route.exit.width;
         const queueSeconds = assignedCount * 60 / serviceRate;
-        return walkingSeconds + queueSeconds;
+        const preferenceCost = route.exit.kind === "emergency" ? 30 : 0;
+        return walkingSeconds + stairSeconds + queueSeconds + preferenceCost;
       }
 
       function walkingSpeedAtDensity(freeSpeed, density) {
@@ -1999,23 +2278,38 @@
         return Math.min(freeSpeed, hydraulicSpeed);
       }
 
-      function createInitialAgents(routes, regionCells, count, walkingSpeed) {
+      function createInitialAgents(
+        routes,
+        regionCells,
+        count,
+        walkingSpeed,
+        grid,
+        floorIndex,
+        projectedLoads = new Map(),
+        projectedStairLoads = new Map()
+      ) {
         const cells = [...regionCells];
         for (let index = cells.length - 1; index > 0; index -= 1) {
           const swapIndex = Math.floor(Math.random() * (index + 1));
           [cells[index], cells[swapIndex]] = [cells[swapIndex], cells[index]];
         }
 
-        const projectedLoads = new Map(routes.map(route => [route.exit.id, 0]));
+        for (const route of routes) {
+          if (!projectedLoads.has(route.queueId)) projectedLoads.set(route.queueId, 0);
+        }
+        for (const stair of stairs) {
+          if (!projectedStairLoads.has(stair.id)) projectedStairLoads.set(stair.id, 0);
+        }
         const created = [];
         for (let index = 0; index < count; index += 1) {
           const cell = cells[index % cells.length];
-          const position = cellCenter(cell, walkableGrid.columns);
+          const position = cellCenter(cell, grid.columns);
           let selectedRoute = null;
           let selectedCost = Infinity;
           for (const route of routes) {
-            const load = projectedLoads.get(route.exit.id);
-            const cost = estimatedExitTime(position, walkingSpeed, route, load);
+            const load = projectedLoads.get(route.queueId);
+            const stairLoad = route.stairId ? projectedStairLoads.get(route.stairId) : 0;
+            const cost = estimatedExitTime(position, walkingSpeed, route, load, grid, stairLoad);
             if (cost < selectedCost) {
               selectedRoute = route;
               selectedCost = cost;
@@ -2024,7 +2318,10 @@
           if (!selectedRoute || !Number.isFinite(selectedCost)) {
             return { error: "No exit is reachable from a person in the selected starting region." };
           }
-          projectedLoads.set(selectedRoute.exit.id, projectedLoads.get(selectedRoute.exit.id) + 1);
+          projectedLoads.set(selectedRoute.queueId, projectedLoads.get(selectedRoute.queueId) + 1);
+          if (selectedRoute.stairId) {
+            projectedStairLoads.set(selectedRoute.stairId, projectedStairLoads.get(selectedRoute.stairId) + 1);
+          }
           const path = buildAgentPath(cell, selectedRoute, position);
           if (!path) {
             return { error: "A route could not be constructed for a person in the selected region." };
@@ -2034,7 +2331,10 @@
             y: position.y,
             path,
             walkingSpeed,
-            exitId: selectedRoute.exit.id
+            exitId: selectedRoute.exit.id,
+            queueId: selectedRoute.queueId,
+            floorIndex,
+            route: selectedRoute
           });
         }
         return { agents: created };
@@ -2043,14 +2343,35 @@
       function renderCrowd() {
         crowdLayer.replaceChildren();
         queueLayer.replaceChildren();
-        exitQueues = new Map(routeFields.map(route => [route.exit.id, {
+        exitQueues = new Map(exitRouteFields.map(route => [route.queueId, {
           exit: route.exit,
+          floorIndex: route.exitFloorIndex,
+          route,
           people: [],
           serviceAccumulator: 0,
           serviceHeadway: 60 / (maximumSpecificFlow * route.exit.width)
         }]));
         agents = initialAgents.map(createAgent);
+        stairQueues = new Map(stairs.map(stair => [stair.id, {
+          stair,
+          people: [],
+          serviceAccumulator: 0,
+          serviceHeadway: 60 / (maximumSpecificFlow * stair.width)
+        }]));
+        stairTravelers = [];
+        renderActiveFloorCrowd();
         renderQueueIndicators();
+      }
+
+      function renderActiveFloorCrowd() {
+        crowdLayer.replaceChildren();
+        for (const agent of agents) {
+          if (agent.floorIndex === activeFloorIndex && !agent.inStair && !agent.evacuated) {
+            crowdLayer.append(agent.element);
+            agent.element.setAttribute("cx", String(agent.x));
+            agent.element.setAttribute("cy", String(agent.y));
+          }
+        }
       }
 
       function queueIndicatorPosition(exit) {
@@ -2063,6 +2384,7 @@
       function renderQueueIndicators() {
         queueLayer.replaceChildren();
         for (const queue of exitQueues.values()) {
+          if (queue.floorIndex !== activeFloorIndex) continue;
           const count = queue.people.length;
           if (count === 0) {
             continue;
@@ -2096,6 +2418,37 @@
           );
           queueLayer.append(group);
         }
+        for (const queue of stairQueues.values()) {
+          if (queue.people.length === 0) continue;
+          const end = queue.stair.ends.find(point => point.floorId === floors[activeFloorIndex].id);
+          if (!end) continue;
+          const group = svgElement("g", {
+            role: "img",
+            "aria-label": `Stair ${queue.stair.id} queue: ${queue.people.length} people`
+          });
+          group.append(
+            svgElement("rect", {
+              x: end.x - 1.4,
+              y: end.y + 0.8,
+              width: 3,
+              height: 1.5,
+              rx: 0.3,
+              fill: "#f1eafe",
+              stroke: "#563783",
+              "stroke-width": 0.12
+            }),
+            svgElement("text", {
+              x: end.x + 0.1,
+              y: end.y + 1.85,
+              fill: "#563783",
+              "font-family": "system-ui, sans-serif",
+              "font-size": 0.85,
+              "font-weight": 800,
+              "text-anchor": "middle"
+            }, `Q ${queue.people.length}`)
+          );
+          queueLayer.append(group);
+        }
       }
 
       function setSimulationState(nextState) {
@@ -2106,13 +2459,28 @@
         restoreButton.disabled = locked;
         layoutSelect.disabled = locked;
         importLayoutButton.disabled = locked;
+        exportLayoutButton.disabled = locked;
         traceImageButton.disabled = locked;
         clearReferenceImageButton.disabled = locked || !referenceImageDataUrl;
         layoutFileInput.disabled = locked;
         referenceImageFileInput.disabled = locked;
         countInput.disabled = locked;
+        secondCountInput.disabled = locked;
         speedInput.disabled = locked;
         doorWidthInput.disabled = locked;
+        emergencyExitWidthInput.disabled = locked;
+        stairWidthInput.disabled = locked;
+        stairTravelTimeInput.disabled = locked;
+        const hasEmergencyExits = exitRouteFields.some(route => route.exit.kind === "emergency");
+        activateEmergencyExitsButton.disabled = !hasEmergencyExits
+          || !["running", "paused"].includes(simulationState)
+          || emergencyExitsActive;
+        activateEmergencyExitsButton.textContent = emergencyExitsActive ? "Emergency exits active" : "Activate emergency exits";
+        emergencyExitStatus.textContent = !hasEmergencyExits
+          ? "No emergency exits are configured."
+          : emergencyExitsActive
+          ? "Emergency exits are active and available with a 30-second route-choice cost."
+          : "Emergency exits are inactive.";
         playbackSpeedInput.disabled = simulationState === "complete";
         downloadCsvButton.disabled = simulationState !== "complete";
         capturePngButton.disabled = false;
@@ -2132,7 +2500,7 @@
         };
         const messages = {
           ready: setupValid ? "Start to move people toward the exit." : "Correct the setup issues to enable Start.",
-          running: "Starting-area density sets walking speed; exits process up to 24 people/min per foot of clear width.",
+          running: "Starting-area density sets walking speed; exits and stairs process up to 24 people/min per foot of clear width.",
           paused: "Resume or reset the movement.",
           complete: "Everyone has reached the exit."
         };
@@ -2155,75 +2523,131 @@
         if (simulationState !== "ready") {
           return;
         }
+        syncActiveFloor();
         const errors = [];
         const warnings = [];
         const countValid = validateCrowdCount();
         const speedValid = validateWalkingSpeed();
-        if (!countValid) errors.push(countError.textContent);
+        if (!countValid) errors.push(combinedCrowdHint.textContent);
         if (!speedValid) errors.push(speedError.textContent);
-        if (!region) errors.push("Set a starting crowd region.");
-        const exits = items.filter(item => item.type === "exit");
-        if (exits.length === 0) {
-          errors.push("Add at least one exit.");
-        }
-
-        walkableGrid = buildWalkableGrid();
         routeFields = [];
         initialAgents = [];
         agents = [];
         crowdLayer.replaceChildren();
         queueLayer.replaceChildren();
         exitQueues = new Map();
-        const regionCells = region ? regionCellsIn(walkableGrid) : [];
-        if (region && regionCells.length === 0) {
-          errors.push("The selected crowd region contains no walkable cells on the 0.5-foot grid.");
-        }
-
-        for (const exit of exits) {
-          const route = findRouteField(exit, walkableGrid);
-          if (route.error) {
-            warnings.push(`${exit.label} unavailable: ${route.error}`);
-          } else if (!regionCells.some(index => route.distance[index] >= 0)) {
-            warnings.push(`${exit.label} cannot be reached from the selected starting region.`);
-          } else {
-            routeFields.push(route);
+        floorRuntimes = floors.map((floor, floorIndex) => {
+          const grid = buildWalkableGrid(floor.items);
+          const regionCells = regionCellsIn(grid, floor.region);
+          const exits = floor.items.filter(item => item.type === "exit");
+          const routes = [];
+          for (const exit of exits) {
+            const route = findRouteField(exit, grid, floorIndex);
+            if (route.error) {
+              warnings.push(`${floor.name} ${exit.label} unavailable: ${route.error}`);
+            } else {
+              routes.push(route);
+            }
+          }
+          return { floorIndex, grid, regionCells, routes: [...routes], exitRoutes: routes, count: floor.crowdCount };
+        });
+        walkableGrid = floorRuntimes[activeFloorIndex].grid;
+        exitRouteFields = floorRuntimes.flatMap(runtime => runtime.exitRoutes);
+        for (const stair of stairs) {
+          const upperEnd = stair.ends.find(end => end.floorId === 2);
+          const lowerEnd = stair.ends.find(end => end.floorId === 1);
+          if (!upperEnd || !lowerEnd) {
+            warnings.push(`Stair link ${stair.id} does not connect the two floors.`);
+            continue;
+          }
+          const upperField = findRouteFieldToPoint(
+            upperEnd,
+            floorRuntimes[1].grid,
+            1,
+            stair.id
+          );
+          const lowerField = findRouteFieldToPoint(
+            lowerEnd,
+            floorRuntimes[0].grid,
+            0,
+            stair.id
+          );
+          if (upperField.error || lowerField.error) {
+            warnings.push(upperField.error || lowerField.error);
+            continue;
+          }
+          const lowerIndex = cellIndexAt(lowerEnd, floorRuntimes[0].grid);
+          for (const exitRoute of floorRuntimes[0].exitRoutes) {
+            if (exitRoute.distance[lowerIndex] < 0) continue;
+            floorRuntimes[1].routes.push({
+              ...upperField,
+              exit: exitRoute.exit,
+              exitFloorIndex: 0,
+              queueId: exitRoute.queueId,
+              stairId: stair.id,
+              stairQueueId: stair.id,
+              stair,
+              destinationEnd: lowerEnd,
+              exitRoute
+            });
           }
         }
+        routeFields = floorRuntimes.flatMap(runtime => runtime.routes);
 
-        if (routeFields.length === 0 && exits.length > 0) {
-          errors.push("The selected crowd region contains walkable cells with no route to any available exit.");
-        }
-
-        if (routeFields.length > 0
-          && regionCells.some(index => !routeFields.some(route => route.distance[index] >= 0))) {
-          errors.push("The selected crowd region contains walkable cells with no route to any available exit.");
-        }
-
-        const startArea = regionCells.length * gridStep * gridStep;
-        const startingDensity = startArea > 0 && countValid ? Number(countInput.value) / startArea : 0;
-        if (countValid && startArea > 0 && startingDensity >= jamDensity) {
-          errors.push(`Starting density is ${numberLabel(startingDensity)} people/ft²; it must be below ${jamDensity.toFixed(2)} people/ft².`);
-        }
-        const startingWalkingSpeed = speedValid && startArea > 0
-          ? walkingSpeedAtDensity(Number(speedInput.value) * 88, startingDensity)
-          : 0;
-
-        if (errors.length === 0 && routeFields.length > 0) {
-          const initial = createInitialAgents(routeFields, regionCells, Number(countInput.value), startingWalkingSpeed);
-          if (initial.error) {
-            errors.push(initial.error);
-          } else {
-            initialAgents = initial.agents;
+        const totalPeople = floors.reduce((sum, floor) => sum + (Number.isFinite(floor.crowdCount) ? floor.crowdCount : 0), 0);
+        const projectedLoads = new Map(exitRouteFields.map(route => [route.queueId, 0]));
+        const projectedStairLoads = new Map(stairs.map(stair => [stair.id, 0]));
+        for (const runtime of floorRuntimes) {
+          if (runtime.count === 0 || !countValid) continue;
+          const floor = floors[runtime.floorIndex];
+          if (!floor.region) {
+            errors.push(`Set a starting region on the ${floor.name.toLowerCase()}.`);
+            continue;
           }
+          if (runtime.regionCells.length === 0) {
+            errors.push(`The ${floor.name.toLowerCase()} starting region contains no walkable cells on the 0.5-foot grid.`);
+            continue;
+          }
+          const normalRoutes = runtime.routes.filter(route => route.exit.kind !== "emergency");
+          if (normalRoutes.length === 0) {
+            errors.push(`Add a reachable normal exit on the ${floor.name.toLowerCase()} or connect this floor with stairs.`);
+            continue;
+          }
+          if (runtime.regionCells.some(index => !normalRoutes.some(route => route.distance[index] >= 0))) {
+            errors.push(`Some walkable cells in the ${floor.name.toLowerCase()} starting region have no route to a normal exit.`);
+            continue;
+          }
+          const startArea = runtime.regionCells.length * gridStep * gridStep;
+          const startingDensity = runtime.count / startArea;
+          if (startingDensity >= jamDensity) {
+            errors.push(`${floor.name} starting density is ${numberLabel(startingDensity)} people/ft²; it must be below ${jamDensity.toFixed(2)} people/ft².`);
+            continue;
+          }
+          const startingWalkingSpeed = speedValid
+            ? walkingSpeedAtDensity(Number(speedInput.value) * 88, startingDensity)
+            : 0;
+          const initial = createInitialAgents(
+            normalRoutes,
+            runtime.regionCells,
+            runtime.count,
+            startingWalkingSpeed,
+            runtime.grid,
+            runtime.floorIndex,
+            projectedLoads,
+            projectedStairLoads
+          );
+          if (initial.error) errors.push(`${floor.name}: ${initial.error}`);
+          else initialAgents.push(...initial.agents);
         }
+        if (totalPeople === 0) errors.push("Add people to at least one floor.");
 
-        setupValid = errors.length === 0 && initialAgents.length > 0;
+        setupValid = errors.length === 0 && initialAgents.length === totalPeople;
         elapsedSeconds = 0;
         elapsedTime.textContent = "0.0 s";
         evacuatedCount.textContent = "0";
-        remainingCount.textContent = countValid ? countInput.value : "—";
+        remainingCount.textContent = countValid ? String(totalPeople) : "—";
         simulationFeedback.textContent = setupValid
-          ? `Ready: ${countInput.value} people can use ${routeFields.length} exit${routeFields.length === 1 ? "" : "s"}. Starting density is ${startingDensity.toFixed(2)} people/ft²; walking speed is ${(startingWalkingSpeed / 88).toFixed(2)} mph. FIFO queues are enabled.${warnings.length ? ` ${warnings.join(" ")}` : ""}`
+          ? `Ready: ${totalPeople} people across two floors. Exits and stair queues are flow-limited; emergency exits activate during the run.${warnings.length ? ` ${warnings.join(" ")}` : ""}`
           : [...new Set([...errors, ...warnings])].join(" ");
         simulationFeedback.classList.toggle("is-invalid", !setupValid);
         nextReassessmentSeconds = routeReassessmentInterval;
@@ -2246,7 +2670,8 @@
       }
 
       function setAgentRoute(agent, route) {
-        const index = cellIndexAt(agent);
+        const grid = floorRuntimes[agent.floorIndex].grid;
+        const index = cellIndexAt(agent, grid);
         if (route.distance[index] < 0) {
           return false;
         }
@@ -2257,35 +2682,52 @@
         agent.path = path;
         agent.targetIndex = 0;
         agent.exitId = route.exit.id;
+        agent.queueId = route.queueId;
+        agent.route = route;
         return true;
       }
 
       function reassessRoutes() {
-        const projectedLoads = new Map(routeFields.map(route => [
-          route.exit.id,
-          exitQueues.get(route.exit.id).people.length
+        const availableRoutes = routeFields.filter(route => route.exit.kind !== "emergency" || emergencyExitsActive);
+        const projectedLoads = new Map(availableRoutes.map(route => [
+          route.queueId,
+          exitQueues.get(route.queueId).people.length
+        ]));
+        const projectedStairLoads = new Map(stairs.map(stair => [
+          stair.id,
+          stairQueues.get(stair.id).people.length
         ]));
         for (const agent of agents) {
-          if (!agent.evacuated && !agent.queued) {
-            projectedLoads.set(agent.exitId, projectedLoads.get(agent.exitId) + 1);
+          if (!agent.evacuated && (!agent.queued || agent.queuedAtStair || agent.inStair)) {
+            projectedLoads.set(agent.queueId, projectedLoads.get(agent.queueId) + 1);
+          }
+          if (!agent.evacuated && !agent.queued && !agent.inStair) {
+            if (agent.route.stairId) {
+              projectedStairLoads.set(agent.route.stairId, projectedStairLoads.get(agent.route.stairId) + 1);
+            }
           }
         }
         for (const agent of agents) {
-          if (agent.evacuated || agent.queued) {
+          if (agent.evacuated || agent.queued || agent.inStair) {
             continue;
           }
-          const currentRoute = routeFields.find(route => route.exit.id === agent.exitId);
+          const currentRoute = availableRoutes.find(route => route.queueId === agent.queueId);
           if (!currentRoute) {
-            throw new Error(`No route exists for exit ${agent.exitId}.`);
+            throw new Error(`No available route exists for exit ${agent.exitId}.`);
           }
-          projectedLoads.set(currentRoute.exit.id, projectedLoads.get(currentRoute.exit.id) - 1);
+          const grid = floorRuntimes[agent.floorIndex].grid;
+          projectedLoads.set(currentRoute.queueId, projectedLoads.get(currentRoute.queueId) - 1);
+          if (currentRoute.stairId) {
+            projectedStairLoads.set(currentRoute.stairId, projectedStairLoads.get(currentRoute.stairId) - 1);
+          }
           let selectedRoute = null;
           let selectedCost = Infinity;
           let currentCost = Infinity;
-          for (const route of routeFields) {
-            const load = projectedLoads.get(route.exit.id);
-            const cost = estimatedExitTime(agent, agent.walkingSpeed, route, load);
-            if (route.exit.id === agent.exitId) {
+          for (const route of availableRoutes.filter(candidate => candidate.floorIndex === agent.floorIndex)) {
+            const load = projectedLoads.get(route.queueId);
+            const stairLoad = route.stairId ? projectedStairLoads.get(route.stairId) : 0;
+            const cost = estimatedExitTime(agent, agent.walkingSpeed, route, load, grid, stairLoad);
+            if (route.queueId === agent.queueId) {
               currentCost = cost;
             }
             if (cost < selectedCost) {
@@ -2294,26 +2736,80 @@
             }
           }
           const shouldSwitch = selectedRoute
-            && selectedRoute.exit.id !== currentRoute.exit.id
+            && selectedRoute.queueId !== currentRoute.queueId
             && selectedCost <= currentCost * (1 - routeSwitchImprovement);
           const chosenRoute = shouldSwitch ? selectedRoute : currentRoute;
           if (!chosenRoute) {
             continue;
           }
-          projectedLoads.set(chosenRoute.exit.id, projectedLoads.get(chosenRoute.exit.id) + 1);
-          if (chosenRoute.exit.id !== agent.exitId && !setAgentRoute(agent, chosenRoute)) {
+          projectedLoads.set(chosenRoute.queueId, projectedLoads.get(chosenRoute.queueId) + 1);
+          if (chosenRoute.stairId) {
+            projectedStairLoads.set(chosenRoute.stairId, projectedStairLoads.get(chosenRoute.stairId) + 1);
+          }
+          if (chosenRoute.queueId !== currentRoute.queueId && !setAgentRoute(agent, chosenRoute)) {
             throw new Error(`Could not create a route to ${chosenRoute.exit.label}.`);
           }
         }
       }
 
+      function joinStairQueue(agent) {
+        const queue = stairQueues.get(agent.route.stairId);
+        if (!queue) {
+          throw new Error(`No queue exists for stair ${agent.route.stairId}.`);
+        }
+        agent.queued = true;
+        agent.queuedAtStair = true;
+        queue.people.push(agent);
+      }
+
       function joinExitQueue(agent) {
-        const queue = exitQueues.get(agent.exitId);
+        const queue = exitQueues.get(agent.queueId);
         if (!queue) {
           throw new Error(`No queue exists for exit ${agent.exitId}.`);
         }
         agent.queued = true;
+        agent.queuedAtStair = false;
         queue.people.push(agent);
+      }
+
+      function serviceStairQueues(deltaSeconds) {
+        for (const queue of stairQueues.values()) {
+          if (queue.people.length === 0) {
+            queue.serviceAccumulator = 0;
+            continue;
+          }
+          queue.serviceAccumulator += deltaSeconds;
+          while (queue.people.length > 0 && queue.serviceAccumulator >= queue.serviceHeadway) {
+            queue.serviceAccumulator -= queue.serviceHeadway;
+            const agent = queue.people.shift();
+            agent.queued = false;
+            agent.queuedAtStair = false;
+            agent.inStair = true;
+            agent.stairArrivalTime = elapsedSeconds + queue.stair.travelTime;
+            agent.stairDestinationEnd = queue.stair.ends.find(point => point.floorId === 1);
+            agent.postStairRoute = agent.route.exitRoute;
+            stairTravelers.push(agent);
+          }
+          if (queue.people.length === 0) queue.serviceAccumulator = 0;
+        }
+      }
+
+      function processStairTravelers() {
+        const arrived = stairTravelers.filter(agent => elapsedSeconds >= agent.stairArrivalTime);
+        stairTravelers = stairTravelers.filter(agent => elapsedSeconds < agent.stairArrivalTime);
+        for (const agent of arrived) {
+          agent.floorIndex = 0;
+          agent.x = agent.stairDestinationEnd.x;
+          agent.y = agent.stairDestinationEnd.y;
+          agent.inStair = false;
+          agent.hasPassedStair = true;
+          const route = agent.postStairRoute;
+          agent.postStairRoute = null;
+          if (!setAgentRoute(agent, route)) {
+            throw new Error(`Could not continue from stair ${agent.route.stairId} to ${route.exit.label}.`);
+          }
+          if (activeFloorIndex === 0) crowdLayer.append(agent.element);
+        }
       }
 
       function serviceExitQueues(deltaSeconds) {
@@ -2346,6 +2842,8 @@
         lastFrameTime = timestamp;
         elapsedSeconds += deltaSeconds;
 
+        serviceStairQueues(deltaSeconds);
+        processStairTravelers();
         serviceExitQueues(deltaSeconds);
         while (elapsedSeconds >= nextReassessmentSeconds) {
           reassessRoutes();
@@ -2353,7 +2851,7 @@
         }
 
         for (const agent of agents) {
-          if (agent.evacuated || agent.queued) {
+          if (agent.evacuated || agent.queued || agent.inStair) {
             continue;
           }
           let distanceLeft = movementSpeed(agent) * deltaSeconds;
@@ -2384,7 +2882,8 @@
             agent.element.setAttribute("cy", String(agent.y));
           }
           if (agent.targetIndex === agent.path.length) {
-            joinExitQueue(agent);
+            if (agent.route.stairId && !agent.hasPassedStair) joinStairQueue(agent);
+            else joinExitQueue(agent);
           }
         }
 
@@ -2423,6 +2922,7 @@
         if (frameRequest !== null) cancelAnimationFrame(frameRequest);
         frameRequest = null;
         elapsedSeconds = 0;
+        emergencyExitsActive = false;
         nextReassessmentSeconds = routeReassessmentInterval;
         renderCrowd();
         resetLiveResults(agents.length);
@@ -2431,8 +2931,13 @@
       }
 
       function setTool(tool) {
+        if (tool !== "stair" && pendingStairEnd) {
+          pendingStairEnd = null;
+          renderStairs();
+        }
         currentTool = tool;
         selectedItemId = null;
+        selectedStairId = null;
         for (const button of toolButtons) {
           button.setAttribute("aria-pressed", String(button.dataset.tool === tool));
         }
@@ -2444,7 +2949,11 @@
           region: "Drag on the plan to set the initial crowd region.",
           wall: "Drag on the plan to draw a wall, measured in feet.",
           seat: "Drag on the plan to add a seat block.",
-          exit: "Click near a room edge to place an exit using the door width below."
+          exit: "Click near a room edge to place a normal exit using the door width below.",
+          "emergency-exit": "Click near a room edge to place a lower-priority emergency exit.",
+          stair: pendingStairEnd
+            ? `First stair endpoint set on ${floors[pendingStairEnd.floorId - 1].name}. Switch floors and click its matching endpoint.`
+            : "Click the first stair endpoint, switch floors, then click the matching endpoint."
         };
         instructions.textContent = messages[tool];
         renderItems();
@@ -2452,6 +2961,16 @@
 
       function selectItem(event) {
         const itemElement = event.target.closest("[data-item-id]");
+        const stairElement = event.target.closest("[data-stair-id]");
+        if (stairElement) {
+          selectedItemId = null;
+          selectedStairId = Number(stairElement.dataset.stairId);
+          renderItems();
+          renderStairs();
+          instructions.textContent = `Stair link ${selectedStairId}: select / delete removes the paired connector.`;
+          return true;
+        }
+        selectedStairId = null;
         if (!itemElement) {
           selectedItemId = null;
           renderItems();
@@ -2465,9 +2984,44 @@
         } else if (selected.type === "wall") {
           instructions.textContent = `Wall: (${numberLabel(selected.x1)}, ${numberLabel(selected.y1)}) to (${numberLabel(selected.x2)}, ${numberLabel(selected.y2)}) ft.`;
         } else {
-          instructions.textContent = `${selected.label}: ${numberLabel(selected.width)} ft wide on the ${selected.side} wall.`;
+          const kind = selected.kind === "emergency" ? "Emergency exit" : "Normal exit";
+          instructions.textContent = `${kind} ${selected.label}: ${numberLabel(selected.width)} ft wide on the ${selected.side} wall.`;
         }
         return true;
+      }
+
+      function addStairEndpoint(point) {
+        const floorId = floors[activeFloorIndex].id;
+        if (!pendingStairEnd) {
+          pendingStairEnd = { floorId, x: point.x, y: point.y };
+          renderStairs();
+          instructions.textContent = `First endpoint set on ${floors[activeFloorIndex].name}. Switch floors and click the matching endpoint.`;
+          return;
+        }
+        if (pendingStairEnd.floorId === floorId) {
+          instructions.textContent = "The stair endpoints must be on different floors. Switch floors to place the second endpoint.";
+          return;
+        }
+        const width = Number(stairWidthInput.value);
+        const travelTime = Number(stairTravelTimeInput.value);
+        if (!Number.isFinite(width) || width < 1 || width > 20
+          || !Number.isFinite(travelTime) || travelTime < 1 || travelTime > 600) {
+          instructions.textContent = "Set a stair width from 1 to 20 ft and a traversal time from 1 to 600 seconds.";
+          return;
+        }
+        stairs.push({
+          id: nextStairId++,
+          width,
+          travelTime,
+          ends: [pendingStairEnd, { floorId, x: point.x, y: point.y }]
+        });
+        pendingStairEnd = null;
+        selectedStairId = stairs[stairs.length - 1].id;
+        markCustomLayout();
+        renderItems();
+        renderStairs();
+        instructions.textContent = `Stair link ${selectedStairId} added between floors.`;
+        refreshSimulationSetup();
       }
 
       function commitDrawing() {
@@ -2523,16 +3077,31 @@
       }
 
       function restoreSample() {
-        items = sampleItems.map(item => ({ ...item }));
+        floors = [
+          { id: 1, name: "Ground floor", items: sampleItems.map(item => ({ ...item })), region: { ...room }, crowdCount: 500 },
+          { id: 2, name: "Second floor", items: [], region: null, crowdCount: 0 }
+        ];
+        stairs = [];
+        floorReferenceImages = [null, null];
+        pendingStairEnd = null;
+        selectedStairId = null;
+        nextStairId = 1;
+        activeFloorIndex = 0;
+        items = floors[0].items;
         nextItemId = Math.max(...items.map(item => item.id)) + 1;
         nextExitNumber = 2;
-        region = { ...room };
+        region = floors[0].region;
         selectedItemId = null;
+        emergencyExitsActive = false;
         countInput.value = "500";
+        secondCountInput.value = "0";
         speedInput.value = "2.7";
         doorWidthInput.value = "6";
         doorWidthError.textContent = "";
         doorWidthInput.removeAttribute("aria-invalid");
+        emergencyExitWidthInput.value = "3";
+        emergencyExitWidthError.textContent = "";
+        emergencyExitWidthInput.removeAttribute("aria-invalid");
         layoutSelect.value = "sample";
         layoutTitle.textContent = "Training Hall";
         layoutDescription.textContent = "Sample floor plan · layout units: feet";
@@ -2542,10 +3111,13 @@
           "A 70 by 40 foot rectangular room with editable seating, walls, exits, and a starting region. People move along routes on a half-foot grid; queue counts appear at busy exits."
         );
         scenarioBadge.textContent = "Sample floor plan loaded · not running";
+        floorOneButton.setAttribute("aria-pressed", "true");
+        floorTwoButton.setAttribute("aria-pressed", "false");
         clearReferenceImage();
         validateCrowdCount();
         renderItems();
         renderRegion();
+        renderStairs();
         setTool("select");
         simulationState = "ready";
         refreshSimulationSetup();
@@ -2556,6 +3128,17 @@
       }
 
       importLayoutButton.addEventListener("click", () => layoutFileInput.click());
+      exportLayoutButton.addEventListener("click", () => {
+        try {
+          const json = createLayoutJson();
+          downloadBlob(new Blob([json], { type: "application/json;charset=utf-8" }), "stadium-layout-v2.json");
+          layoutImportStatus.classList.remove("is-invalid");
+          layoutImportStatus.textContent = "Two-floor version 2 layout downloaded.";
+        } catch (error) {
+          layoutImportStatus.classList.add("is-invalid");
+          layoutImportStatus.textContent = `Layout export failed: ${error instanceof Error ? error.message : "The layout could not be exported."}`;
+        }
+      });
       layoutFileInput.addEventListener("change", async () => {
         const file = layoutFileInput.files[0];
         if (!file) {
@@ -2662,8 +3245,9 @@
         exportStatus.textContent = "Preparing floor-plan PNG…";
         try {
           const png = await renderFloorPlanPng();
-          downloadBlob(png, "stadium-evacuation-floorplan.png");
-          exportStatus.textContent = "PNG capture downloaded.";
+          const floorFileLabel = activeFloorIndex === 0 ? "ground-floor" : "second-floor";
+          downloadBlob(png, `stadium-evacuation-${floorFileLabel}.png`);
+          exportStatus.textContent = `${floors[activeFloorIndex].name} PNG capture downloaded.`;
         } catch (error) {
           exportStatus.classList.add("is-invalid");
           exportStatus.textContent = `PNG capture failed: ${error instanceof Error ? error.message : "The floor plan could not be captured."}`;
@@ -2673,7 +3257,19 @@
       });
 
       countInput.addEventListener("input", refreshSimulationSetup);
+      secondCountInput.addEventListener("input", refreshSimulationSetup);
       speedInput.addEventListener("input", refreshSimulationSetup);
+      stairWidthInput.addEventListener("input", refreshSimulationSetup);
+      stairTravelTimeInput.addEventListener("input", refreshSimulationSetup);
+      floorOneButton.addEventListener("click", () => setActiveFloor(0));
+      floorTwoButton.addEventListener("click", () => setActiveFloor(1));
+      activateEmergencyExitsButton.addEventListener("click", () => {
+        if (!["running", "paused"].includes(simulationState) || emergencyExitsActive) return;
+        emergencyExitsActive = true;
+        reassessRoutes();
+        renderQueueIndicators();
+        setSimulationState(simulationState);
+      });
       playbackSpeedInput.addEventListener("change", () => {
         if (simulationState === "running") {
           lastFrameTime = performance.now();
@@ -2683,6 +3279,15 @@
       pauseButton.addEventListener("click", pauseSimulation);
       resetButton.addEventListener("click", resetSimulation);
       deleteButton.addEventListener("click", () => {
+        if (selectedStairId !== null) {
+          stairs = stairs.filter(stair => stair.id !== selectedStairId);
+          selectedStairId = null;
+          markCustomLayout();
+          renderStairs();
+          instructions.textContent = "Selected stair link and its paired endpoints removed.";
+          refreshSimulationSetup();
+          return;
+        }
         if (selectedItemId === null) {
           return;
         }
@@ -2699,11 +3304,24 @@
           restoreSample();
           return;
         }
+        floors = [
+          { id: 1, name: "Ground floor", items: [], region: null, crowdCount: 500 },
+          { id: 2, name: "Second floor", items: [], region: null, crowdCount: 0 }
+        ];
+        stairs = [];
+        floorReferenceImages = [null, null];
+        activeFloorIndex = 0;
         items = [];
         nextItemId = 1;
         nextExitNumber = 1;
         region = null;
+        floors[0].items = items;
+        floors[0].region = region;
+        pendingStairEnd = null;
         selectedItemId = null;
+        selectedStairId = null;
+        floorOneButton.setAttribute("aria-pressed", "true");
+        floorTwoButton.setAttribute("aria-pressed", "false");
         layoutTitle.textContent = "Custom layout";
         layoutDescription.textContent = "Custom floor plan · 70 × 40 ft canvas";
         roomCaption.textContent = "CUSTOM FLOOR PLAN · 70 × 40 FT";
@@ -2714,6 +3332,7 @@
         scenarioBadge.textContent = "Custom layout · not running";
         renderItems();
         renderRegion();
+        renderStairs();
         setTool("seat");
         refreshSimulationSetup();
       });
@@ -2729,6 +3348,14 @@
         }
         if (currentTool === "exit") {
           addExit(point);
+          return;
+        }
+        if (currentTool === "emergency-exit") {
+          addExit(point, "emergency");
+          return;
+        }
+        if (currentTool === "stair") {
+          addStairEndpoint(point);
           return;
         }
         drawing = { tool: currentTool, start: point, end: point };
@@ -2765,12 +3392,12 @@
           return;
         }
         const itemElement = event.target.closest("[data-item-id]");
-        if ((event.key === "Enter" || event.key === " ") && itemElement && currentTool === "select") {
+        const stairElement = event.target.closest("[data-stair-id]");
+        if ((event.key === "Enter" || event.key === " ") && (itemElement || stairElement) && currentTool === "select") {
           event.preventDefault();
-          selectedItemId = Number(itemElement.dataset.itemId);
-          renderItems();
+          selectItem(event);
         }
-        if (event.key === "Delete" && selectedItemId !== null) {
+        if (event.key === "Delete" && (selectedItemId !== null || selectedStairId !== null)) {
           deleteButton.click();
         }
       });
